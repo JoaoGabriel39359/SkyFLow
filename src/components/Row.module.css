@@ -1,27 +1,27 @@
 .row {
-  margin: 2rem 0;
+  margin: 2.2rem 0;
   padding: 0 4%;
 }
 
 .title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #e5e5e5;
-  margin-bottom: 1rem;
+  font-size: 1.35rem;
+  font-weight: 750;
+  color: rgba(255, 255, 255, 0.92);
+  margin-bottom: 0.9rem;
+  letter-spacing: -0.03em;
 }
 
 .container {
   position: relative;
-  group: hover;
 }
 
 .slider {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.8rem;
   overflow-x: scroll;
   scrollbar-width: none;
   scroll-behavior: smooth;
-  padding: 1rem 0;
+  padding: 1.1rem 0 1.5rem;
 }
 
 .slider::-webkit-scrollbar {
@@ -32,25 +32,37 @@
   position: relative;
   min-width: 280px;
   height: 160px;
-  border-radius: 4px;
+  border-radius: 16px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  background: var(--card-bg);
+  transition:
+    transform 0.24s ease,
+    box-shadow 0.24s ease,
+    border-color 0.24s ease;
+  background:
+    radial-gradient(circle at center, rgba(139, 92, 246, 0.12), transparent 60%),
+    #0b0b14;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.card:hover, .card:focus, .cardFocused {
-  transform: scale(1.1);
+.card:hover,
+.card:focus,
+.cardFocused {
+  transform: scale(1.075);
   z-index: 10;
-  box-shadow: 0 0 20px rgba(229, 9, 20, 0.8); /* Glow vermelho Netflix */
-  border: 3px solid #e50914;
+  box-shadow:
+    0 18px 45px rgba(0, 0, 0, 0.55),
+    0 0 36px rgba(139, 92, 246, 0.45);
+  border: 2px solid rgba(139, 92, 246, 0.95);
   outline: none;
 }
 
 .thumbnail {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #090912;
+  padding: 0.35rem;
 }
 
 .cardOverlay {
@@ -59,18 +71,22 @@
   left: 0;
   right: 0;
   padding: 1rem;
-  background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+  background:
+    linear-gradient(to top, rgba(0, 0, 0, 0.88), rgba(0, 0, 0, 0));
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.24s ease;
 }
 
-.card:hover .cardOverlay, .cardFocused .cardOverlay {
+.card:hover .cardOverlay,
+.cardFocused .cardOverlay {
   opacity: 1;
 }
 
 .channelName {
-  font-size: 1rem;
-  font-weight: 500;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
 }
 
 .arrow {
@@ -99,5 +115,10 @@
   transform: scale(1.1);
 }
 
-.left { left: 0; }
-.right { right: 0; }
+.left {
+  left: 0;
+}
+
+.right {
+  right: 0;
+}

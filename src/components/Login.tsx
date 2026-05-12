@@ -20,15 +20,17 @@ export default function Login({ onLogin }: LoginProps) {
   return (
     <div className={styles.container}>
       <div className={styles.card}>
-        <h1 className={styles.title}>SkyFlow IPTV</h1>
-        <p className={styles.subtitle}>Entre com seus dados Xtream Codes</p>
+        <h1 className={styles.title}>Nuvix</h1>
+        <p className={styles.subtitle}>
+  Sua experiência premium de streaming começa aqui
+</p>
         
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.inputGroup}>
             <label>URL do Servidor</label>
             <input 
               type="text" 
-              placeholder="http://exemplo.com:8080" 
+              placeholder="https://servidor.com" 
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               required
@@ -39,7 +41,7 @@ export default function Login({ onLogin }: LoginProps) {
             <label>Usuário</label>
             <input 
               type="text" 
-              placeholder="Seu usuário" 
+              placeholder="Digite seu usuário" 
               value={user}
               onChange={(e) => setUser(e.target.value)}
               required
@@ -50,18 +52,18 @@ export default function Login({ onLogin }: LoginProps) {
             <label>Senha</label>
             <input 
               type="password" 
-              placeholder="Sua senha" 
+              placeholder="Digite sua senha" 
               value={pass}
               onChange={(e) => setPass(e.target.value)}
               required
             />
           </div>
           
-          <button type="submit" className={styles.loginBtn}>Entrar Agora</button>
+          <button type="submit" className={styles.loginBtn}>Continuar</button>
         </form>
         
         <p className={styles.disclaimer}>
-          Não fornecemos conteúdo. Este é apenas um player de mídia.
+          Nuvix é um player de mídia e não hospeda conteúdos.
         </p>
       </div>
     </div>

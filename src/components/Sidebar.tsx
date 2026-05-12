@@ -18,6 +18,7 @@ const menuItems = [
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tabId: string) => void;
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 function FocusableMenuItem({ item, activeTab, isExpanded, onTabChange }: any) {
@@ -38,7 +39,8 @@ function FocusableMenuItem({ item, activeTab, isExpanded, onTabChange }: any) {
   );
 }
 
-export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+export default function Sidebar({ activeTab, onTabChange, onExpandedChange }: SidebarProps) {
+  
   const [isExpanded, setIsExpanded] = useState(false);
 
   const { ref, focusKey, hasFocusedChild } = useFocusable({
@@ -54,6 +56,9 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
       setIsExpanded(false);
     }
   }, [hasFocusedChild]);
+  useEffect(() => {
+  onExpandedChange?.(isExpanded);
+}, [isExpanded, onExpandedChange]);
 
   return (
     <FocusContext.Provider value={focusKey}>
@@ -64,8 +69,8 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         onMouseLeave={() => setIsExpanded(false)}
       >
         <div className={styles.logo}>
-          <div className={styles.logoIcon}>SF</div>
-          {isExpanded && <span className={styles.logoText}>SkyFlow</span>}
+          <div className={styles.logoIcon}>N</div>
+    {isExpanded && <span className={styles.logoText}>Nuvix</span>}
         </div>
 
         <nav className={styles.nav}>

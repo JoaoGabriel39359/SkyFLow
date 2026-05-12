@@ -76,3 +76,87 @@ body {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+.nuvixLoading {
+  height: 100vh;
+  width: 100vw;
+  background:
+    radial-gradient(circle at center, rgba(139, 92, 246, 0.22), transparent 34%),
+    linear-gradient(135deg, #05050c, #020208);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.nuvixGlow {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: rgba(139, 92, 246, 0.24);
+  filter: blur(110px);
+  animation: pulseGlow 2.4s ease-in-out infinite;
+}
+
+.nuvixLoaderCard {
+  position: relative;
+  text-align: center;
+}
+
+.nuvixLoaderCard h1 {
+  margin: 0 0 1.5rem;
+  color: white;
+  font-size: 3.6rem;
+  font-weight: 900;
+  letter-spacing: -0.08em;
+  text-shadow: 0 0 36px rgba(139, 92, 246, 0.65);
+}
+
+.nuvixLoaderCard h1::first-letter {
+  color: #8b5cf6;
+}
+
+.nuvixLoaderCard p {
+  margin-top: 1.2rem;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.95rem;
+}
+
+.loadingBar {
+  width: 240px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.loadingBar span {
+  display: block;
+  height: 100%;
+  width: 45%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #8b5cf6, #5b8cff);
+  animation: loadingMove 1.2s ease-in-out infinite;
+}
+
+@keyframes loadingMove {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.12);
+  }
+}

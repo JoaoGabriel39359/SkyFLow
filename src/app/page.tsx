@@ -22,6 +22,7 @@ export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [credentials, setCredentials] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('live');
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   // Estados de Carregamento
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -155,67 +156,116 @@ export default function Home() {
   }, [isInitialLoading, isLoggedIn, loadedCategories.length]);
 
   if (isInitialLoading) return (
-     <div style={{ background: '#0a0a0a', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <h2 style={{color: '#e50914', fontFamily: 'sans-serif'}}>SkyFlow - Carregando Interface...</h2>
-     </div>
-  );
+  <div className="nuvixLoading">
+    <div className="nuvixGlow"></div>
 
-  if (!isLoggedIn) {
-    return <Login onLogin={handleLogin} />;
-  }
+    <div className="nuvixLoaderCard">
+      <h1>Nuvix</h1>
 
-  const heroChannel = loadedCategories.length > 0 && loadedCategories[0].channels.length > 0 ? loadedCategories[0].channels[0] : null;
+      <div className="loadingBar">
+        <span></span>
+      </div>
 
-  return (
-    <main style={{ marginLeft: '80px', minHeight: '100vh' }}>
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-      
-      <div className="content-wrapper">
-        {heroChannel && <Hero channel={heroChannel} />}
-        
-        <div style={{ marginTop: '-150px', position: 'relative', zIndex: 10 }}>
-          {loadedCategories.map((category) => (
-            <Row 
-              key={category.id} 
-              title={category.name} 
-              channels={category.channels} 
-              onChannelClick={(channel) => setSelectedChannel(channel)}
-            />
-          ))}
+      <p>Carregando sua experiência...</p>
+    </div>
+  </div>
+);
+if (!isLoggedIn) {
+  return <Login onLogin={handleLogin} />;
+}
 
-          {!isInitialLoading && loadedCategories.length === 0 && (
-            <div style={{ padding: '4rem', textAlign: 'center', color: 'white' }}>
+const heroChannel =
+  loadedCategories.length > 0 &&
+  loadedCategories[0].channels.length > 0
+    ? loadedCategories[0].channels[0]
+    : null;
+
+return (
+ <main
+  style={{
+    marginLeft: isSidebarExpanded ? '260px' : '80px',
+    minHeight: '100vh',
+    transition: 'margin-left 0.28s ease'
+  }}
+>
+    <Sidebar
+  activeTab={activeTab}
+  onTabChange={setActiveTab}
+  onExpandedChange={setIsSidebarExpanded}
+/>
+
+    <div className="content-wrapper">
+      {heroChannel && <Hero channel={heroChannel} />}
+
+      <div
+        style={{
+          marginTop: '-150px',
+          position: 'relative',
+          zIndex: 10
+        }}
+      >
+        {loadedCategories.map((category) => (
+          <Row
+            key={category.id}
+            title={category.name}
+            channels={category.channels}
+            onChannelClick={(channel) =>
+              setSelectedChannel(channel)
+            }
+          />
+        ))}
+
+        {!isInitialLoading &&
+          loadedCategories.length === 0 && (
+            <div
+              style={{
+                padding: '4rem',
+                textAlign: 'center',
+                color: 'white'
+              }}
+            >
               <h2>Nenhum conteúdo encontrado.</h2>
             </div>
           )}
 
-          {/* Elemento invisível que aciona o Intersection Observer */}
-          <div ref={observerTarget} style={{ height: '50px', width: '100%' }}></div>
-          
-          {isLoadingMore && (
-            <div style={{ textAlign: 'center', color: '#e50914', padding: '2rem' }}>
-              Carregando mais categorias...
-            </div>
-          )}
-        </div>
+        <div
+          ref={observerTarget}
+          style={{ height: '50px', width: '100%' }}
+        ></div>
+
+        {isLoadingMore && (
+          <div
+            style={{
+              textAlign: 'center',
+              color: '#8b5cf6',
+              padding: '2rem'
+            }}
+          >
+            Carregando mais categorias...
+          </div>
+        )}
       </div>
+    </div>
 
-      {selectedChannel && (
-        <VideoPlayer 
-          url={selectedChannel.url} 
-          title={selectedChannel.name} 
-          onClose={() => setSelectedChannel(null)} 
-        />
-      )}
+    {selectedChannel && (
+      <VideoPlayer
+        url={selectedChannel.url}
+        title={selectedChannel.name}
+        onClose={() => setSelectedChannel(null)}
+      />
+    )}
 
-      <style jsx global>{`
-        .content-wrapper {
-          padding-bottom: 5rem;
-        }
-        body {
-          overflow: ${selectedChannel ? 'hidden' : 'auto'};
-        }
-      `}</style>
-    </main>
-  );
+    <style jsx global>{`
+      .content-wrapper {
+        padding-bottom: 5rem;
+      }
+
+      body {
+        overflow: ${
+          selectedChannel ? 'hidden' : 'auto'
+        };
+      }
+    `}</style>
+  </main>
+);
 }
