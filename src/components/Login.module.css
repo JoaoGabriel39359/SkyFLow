@@ -1,0 +1,104 @@
+.container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: url('https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=1600&auto=format&fit=crop&q=60') center/cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.card {
+  position: relative;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 3rem;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 450px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  backdrop-filter: blur(10px);
+}
+
+.title {
+  color: var(--accent);
+  font-size: 2.5rem;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  text-align: center;
+  color: #aaa;
+  margin-bottom: 2.5rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.inputGroup label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #ccc;
+}
+
+.inputGroup input {
+  background: #333;
+  border: none;
+  padding: 1rem;
+  border-radius: 4px;
+  color: white;
+  font-size: 1rem;
+}
+
+.inputGroup input:focus {
+  background: #444;
+  outline: 2px solid var(--accent);
+}
+
+.loginBtn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 1rem;
+  border-radius: 4px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: background 0.2s;
+}
+
+.loginBtn:hover {
+  background: var(--accent-hover);
+}
+
+.disclaimer {
+  margin-top: 2rem;
+  font-size: 0.75rem;
+  color: #666;
+  text-align: center;
+  line-height: 1.4;
+}

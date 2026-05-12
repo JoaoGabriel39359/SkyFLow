@@ -1,0 +1,87 @@
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  background: linear-gradient(to right, #000 0%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 0;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 100;
+  backdrop-filter: blur(5px);
+}
+
+.expanded {
+  width: 240px;
+  background: #000;
+  align-items: flex-start;
+  padding-left: 1.5rem;
+}
+
+.logo {
+  margin-bottom: 3rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.logoIcon {
+  width: 40px;
+  height: 40px;
+  background: var(--accent);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.logoText {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--accent);
+  letter-spacing: -1px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.navItem {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 0.8rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  width: calc(100% - 1rem);
+}
+
+.navItem:hover, .focused {
+  color: var(--foreground);
+  background: rgba(255, 255, 255, 0.1);
+  outline: none; /* Remove o contorno padrão do navegador, usaremos apenas nosso estilo */
+  border-left: 4px solid var(--accent); /* Destaque visual forte para TV */
+}
+
+.active {
+  color: var(--foreground);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.label {
+  font-size: 1.1rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
