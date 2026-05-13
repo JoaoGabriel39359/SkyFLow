@@ -94,6 +94,9 @@ export default function Home() {
   // Controla o carregamento de mais categorias quando o usuário desce
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  // Controla se a seta "Mais categorias abaixo" deve aparecer
+const [canScrollDown, setCanScrollDown] = useState(false);
+
   // Guarda todas as categorias retornadas pela API
   const [allCategories, setAllCategories] = useState<any[]>([]);
 
@@ -305,6 +308,7 @@ export default function Home() {
     }
   }, [isInitialLoading, isLoggedIn, activeTab, loadedCategories.length]);
 
+  
   // Carrega mais categorias quando o foco chega na última linha
   const handleLoadMoreByFocus = useCallback(() => {
     // Evita chamadas duplicadas ou desnecessárias
@@ -332,7 +336,43 @@ export default function Home() {
     allCategories,
     activeTab,
   ]);
+useEffect(() => {
+  const checkCanScrollDown = () => {
+    const pageHeight = document.documentElement.scrollHeight;
+    const screenHeight = window.innerHeight;
+    const currentScroll = window.scrollY;
 
+    const hasVerticalScroll = pageHeight > screenHeight + 80;
+    const isNearBottom = currentScroll + screenHeight >= pageHeight - 120;
+
+    setCanScrollDown(
+      activeTab !== 'home' &&
+      activeTab !== 'search' &&
+      activeTab !== 'settings' &&
+      !selectedChannel &&
+      hasVerticalScroll &&
+      !isNearBottom
+    );
+  };
+
+  checkCanScrollDown();
+
+  const timeout = setTimeout(checkCanScrollDown, 300);
+
+  window.addEventListener('scroll', checkCanScrollDown, { passive: true });
+  window.addEventListener('resize', checkCanScrollDown);
+
+  return () => {
+    clearTimeout(timeout);
+    window.removeEventListener('scroll', checkCanScrollDown);
+    window.removeEventListener('resize', checkCanScrollDown);
+  };
+}, [
+  activeTab,
+  selectedChannel,
+  loadedCategories.length,
+  isLoadingMore,
+]);
   // Função chamada quando o usuário faz login
   const handleLogin = (data: any) => {
     // Salva login no navegador
@@ -434,12 +474,12 @@ export default function Home() {
             )}
 
             {/* Indicador visual de que existem mais categorias abaixo */}
-            {loadedCategories.length < allCategories.length && (
-              <div className="scrollDownHint">
-                <span>⌄</span>
-                <p>Mais categorias abaixo</p>
-              </div>
-            )}
+            {canScrollDown && (
+  <div className="scrollDownHint">
+    <span>⌄</span>
+    <p>Mais categorias abaixo</p>
+  </div>
+)}
           </div>
         )}
       </div>
