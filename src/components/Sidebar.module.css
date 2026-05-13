@@ -80,7 +80,8 @@
   width: calc(100% - 1rem);
 }
 
-.navItem:hover,
+.navItem:focus,
+.navItem:focus-visible,
 .focused {
   color: #fff;
   background: rgba(139, 92, 246, 0.14);
@@ -101,4 +102,33 @@
   font-size: 1.05rem;
   font-weight: 650;
   white-space: nowrap;
+}
+.navGroup {
+  width: 100%;
+}
+
+.subMenu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.25rem 0 0.7rem 1.15rem;
+  padding-left: 0.8rem;
+  border-left: 1px solid rgba(139, 92, 246, 0.22);
+}
+
+.subItem {
+  width: calc(100% - 1rem);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.subItem .label {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.subItem:hover,
+.subItem.focused {
+  background: rgba(139, 92, 246, 0.12);
 }

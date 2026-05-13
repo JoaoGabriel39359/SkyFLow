@@ -1,74 +1,287 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
+// Importa recursos principais do React
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+
+// Importa os componentes visuais do app
 import Sidebar from '@/components/Sidebar';
-import Hero from '@/components/Hero';
 import Row from '@/components/Row';
 import VideoPlayer from '@/components/VideoPlayer';
 import Login from '@/components/Login';
+
+// Importa funções responsáveis por buscar dados IPTV e montar a URL do vídeo
 import { getCategories, getStreams, buildStreamUrl } from '@/lib/iptvEngine';
+
+// Importa a biblioteca de navegação por controle remoto/setas
 import { init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 
-// Inicializa o controle global das setas do teclado/controle remoto
+// Inicializa o sistema global de navegação por controle remoto
 init({
   debug: false,
-  visualDebug: false
+  visualDebug: false,
 });
 
-const BATCH_SIZE = 3; // Número de categorias carregadas por vez
+// Define quantas categorias/linhas serão carregadas por vez
+// Exemplo: 4 categorias = 4 linhas iniciais na tela
+const BATCH_SIZE = 4;
 
+// Componente da tela inicial institucional do app
+// Ele aparece quando activeTab === 'home'
+const HomeIntro = () => (
+  <section className="homeIntro">
+    <div className="homeIntroText">
+      <span className="homeEyebrow">Nuvix Media Player</span>
+
+      <h1>Entretenimento fluido para todos os momentos.</h1>
+
+      <p>
+        Organize seus canais, filmes e séries em uma experiência moderna,
+        rápida e pensada para telas grandes.
+      </p>
+    </div>
+
+    {/* Área visual da direita da tela inicial */}
+    <div className="homeHeroVisual">
+      <div className="homePlayerMockup">
+  <div className="homeTvAntenna">
+    <span></span>
+    <span></span>
+  </div>
+
+  <div className="homeTvAntennaBase"></div>
+
+  <div className="homePlayerTop">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+
+  <div className="homePlayerScreen">
+    <div className="nuvixHeroBrand">
+      <div className="nuvixHeroIcon">N</div>
+
+      <div className="nuvixHeroWord">
+        <span>N</span>uvix
+      </div>
+
+      <p>Streaming leve, rápido e pensado para TV.</p>
+    </div>
+  </div>
+</div>
+    </div>
+  </section>
+);
+
+// COMPONENTE PRINCIPAL DA PÁGINA
+// Tudo que usa useState, useEffect e return precisa ficar dentro dessa função
 export default function Home() {
+  // Guarda o canal/filme/série selecionado para abrir no player
   const [selectedChannel, setSelectedChannel] = useState<any>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [credentials, setCredentials] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('live');
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
-  // Estados de Carregamento
+  // Controla se o usuário já está logado
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Guarda url, usuário e senha do login IPTV
+  const [credentials, setCredentials] = useState<any>(null);
+
+  // Controla qual aba está ativa: home, live, movies, series, etc.
+  const [activeTab, setActiveTab] = useState('home');
+
+  // Controla o carregamento inicial da tela
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+  // Controla o carregamento de mais categorias quando o usuário desce
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Estados de Dados
+  // Guarda todas as categorias retornadas pela API
   const [allCategories, setAllCategories] = useState<any[]>([]);
+
+  // Guarda somente as categorias já carregadas/renderizadas na tela
   const [loadedCategories, setLoadedCategories] = useState<any[]>([]);
 
-  const observerTarget = useRef<HTMLDivElement>(null);
+  // Impede que o foco inicial seja aplicado várias vezes
+  const hasSetInitialFocus = useRef(false);
 
-  // Determinar parâmetros com base na aba ativa
-  const getActionParams = (tab: string) => {
-    if (tab === 'movies') return { cat: 'get_vod_categories', stream: 'get_vod_streams', type: 'vod' as const };
-    if (tab === 'series') return { cat: 'get_series_categories', stream: 'get_series', type: 'series' as const };
-    return { cat: 'get_live_categories', stream: 'get_live_streams', type: 'live' as const };
+  // Descobre a aba principal com base na aba atual
+  // Exemplo: live-favorites pertence à base live
+  const getBaseTab = (tab: string) => {
+    if (tab.includes('movies')) return 'movies';
+    if (tab.includes('series')) return 'series';
+    if (tab.includes('live')) return 'live';
+    return tab;
   };
 
-  // 1. Carregamento Inicial (Busca TODAS as categorias, mas carrega streams só das primeiras 3)
+  // Define quais actions da API Xtream devem ser usadas para cada aba
+  const getActionParams = (tab: string) => {
+    const baseTab = getBaseTab(tab);
+
+    if (baseTab === 'movies') {
+      return {
+        cat: 'get_vod_categories',
+        stream: 'get_vod_streams',
+        type: 'vod' as const,
+      };
+    }
+
+    if (baseTab === 'series') {
+      return {
+        cat: 'get_series_categories',
+        stream: 'get_series',
+        type: 'series' as const,
+      };
+    }
+
+    // Padrão: TV ao vivo
+    return {
+      cat: 'get_live_categories',
+      stream: 'get_live_streams',
+      type: 'live' as const,
+    };
+  };
+
+  // Função que carrega um lote de categorias e seus canais/filmes/séries
+  async function loadMoreStreams(
+    creds: any,
+    fullCatList: any[],
+    startIndex: number,
+    params: any
+  ) {
+    // Pega apenas o próximo bloco de categorias
+    const catsToLoad = fullCatList.slice(startIndex, startIndex + BATCH_SIZE);
+
+    // Se não tiver mais categoria, para aqui
+    if (catsToLoad.length === 0) return;
+
+    setIsLoadingMore(true);
+
+    try {
+      // Para cada categoria, busca os streams/conteúdos dela
+      const categoryPromises = catsToLoad.map(async (cat: any) => {
+        const streams = await getStreams(
+          creds.url,
+          creds.user,
+          creds.pass,
+          params.stream,
+          cat.category_id
+        );
+
+        // Só monta a linha se a categoria tiver conteúdo
+        if (Array.isArray(streams) && streams.length > 0) {
+          return {
+            id: cat.category_id,
+            name: cat.category_name,
+
+            // Limita a quantidade de cards por linha para não pesar na TV
+            channels: streams.slice(0, 14).map((s: any) => {
+              const streamId = s.stream_id || s.series_id;
+              const name = s.name || s.title || 'Sem Nome';
+
+              // Usa logo da API; se não existir, usa imagem padrão
+              const logo =
+                s.stream_icon ||
+                s.cover ||
+                'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=800&auto=format&fit=crop&q=60';
+
+              // Extensão padrão para streams
+              const extension = s.container_extension || 'm3u8';
+
+              return {
+                id: streamId,
+                name,
+                logo,
+
+                // Monta a URL final do conteúdo
+                url: buildStreamUrl(
+                  creds.url,
+                  creds.user,
+                  creds.pass,
+                  params.type,
+                  streamId,
+                  extension
+                ),
+              };
+            }),
+          };
+        }
+
+        return null;
+      });
+
+      // Aguarda todas as categorias carregarem
+      const newLoadedCats = (await Promise.all(categoryPromises)).filter(
+        (category) => category !== null
+      );
+
+      // Adiciona as novas categorias às que já estavam na tela
+      setLoadedCategories((prev) => [...prev, ...newLoadedCats]);
+    } catch (error) {
+      console.error('Erro ao buscar mais streams:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
+
+  // Carregamento inicial quando muda de aba
   useEffect(() => {
     const initData = async () => {
+      // Busca login salvo no navegador
       const savedLogin = localStorage.getItem('iptv_login');
+
+      // Se não tiver login salvo, mostra tela de login
       if (!savedLogin) {
+        setIsLoggedIn(false);
         setIsInitialLoading(false);
         return;
       }
 
+      // Converte o login salvo de texto para objeto
       const creds = JSON.parse(savedLogin);
+
+      // Salva credenciais no estado
       setCredentials(creds);
       setIsLoggedIn(true);
-      
+
+      // Se estiver na Home, Busca ou Ajustes, não carrega canais
+      // Isso deixa a tela inicial mais leve
+      if (
+        activeTab === 'home' ||
+        activeTab === 'search' ||
+        activeTab === 'settings'
+      ) {
+        setIsInitialLoading(false);
+        setAllCategories([]);
+        setLoadedCategories([]);
+        return;
+      }
+
+      // Quando entra em TV/Filmes/Séries, limpa dados antigos
       setIsInitialLoading(true);
       setAllCategories([]);
       setLoadedCategories([]);
 
+      // Permite definir foco inicial novamente na nova aba
+      hasSetInitialFocus.current = false;
+
+      // Descobre quais parâmetros usar para a aba atual
       const params = getActionParams(activeTab);
-      
+
       try {
-        const rawCats = await getCategories(creds.url, creds.user, creds.pass, params.cat);
+        // Busca categorias da aba atual
+        const rawCats = await getCategories(
+          creds.url,
+          creds.user,
+          creds.pass,
+          params.cat
+        );
+
         const cats = Array.isArray(rawCats) ? rawCats : [];
         setAllCategories(cats);
 
-        // Carrega streams para a primeira leva de categorias
+        // Carrega o primeiro lote de categorias
         await loadMoreStreams(creds, cats, 0, params);
       } catch (error) {
-        console.error("Erro no carregamento inicial:", error);
+        console.error('Erro no carregamento inicial:', error);
       } finally {
         setIsInitialLoading(false);
       }
@@ -77,195 +290,179 @@ export default function Home() {
     initData();
   }, [activeTab]);
 
-  // 2. Lógica para buscar os canais de um lote (batch) de categorias
-  const loadMoreStreams = async (creds: any, fullCatList: any[], startIndex: number, params: any) => {
-    const catsToLoad = fullCatList.slice(startIndex, startIndex + BATCH_SIZE);
-    if (catsToLoad.length === 0) return;
-
-    setIsLoadingMore(true);
-
-    try {
-      const categoryPromises = catsToLoad.map(async (cat: any) => {
-        const streams = await getStreams(creds.url, creds.user, creds.pass, params.stream, cat.category_id);
-        
-        if (Array.isArray(streams) && streams.length > 0) {
-           return {
-             id: cat.category_id,
-             name: cat.category_name,
-             // Limite suave por categoria para evitar travar na montagem
-             channels: streams.slice(0, 30).map((s: any) => {
-               const streamId = s.stream_id || s.series_id;
-               const name = s.name || s.title || 'Sem Nome';
-               const logo = s.stream_icon || s.cover || 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=800&auto=format&fit=crop&q=60';
-               const extension = s.container_extension || 'm3u8';
-               
-               return {
-                 id: streamId,
-                 name: name,
-                 logo: logo,
-                 url: buildStreamUrl(creds.url, creds.user, creds.pass, params.type, streamId, extension)
-               };
-             })
-           };
-        }
-        return null;
-      });
-      
-      const newLoadedCats = (await Promise.all(categoryPromises)).filter(c => c !== null);
-      
-      setLoadedCategories(prev => [...prev, ...newLoadedCats]);
-    } catch (error) {
-      console.error("Erro ao buscar mais streams:", error);
-    } finally {
-      setIsLoadingMore(false);
-    }
-  };
-
-  // 3. Intersection Observer para disparar o carregamento ao rolar até o fim
-  const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
-    const [target] = entries;
-    if (target.isIntersecting && !isInitialLoading && !isLoadingMore && loadedCategories.length < allCategories.length && credentials) {
-      loadMoreStreams(credentials, allCategories, loadedCategories.length, getActionParams(activeTab));
-    }
-  }, [isInitialLoading, isLoadingMore, loadedCategories.length, allCategories, credentials, activeTab]);
-
+  // Quando os primeiros cards aparecem, coloca o foco no primeiro card
+  // Isso é importante para controle remoto na TV
   useEffect(() => {
-    const element = observerTarget.current;
-    if (!element) return;
-    
-    const observer = new IntersectionObserver(handleObserver, { threshold: 0.1 });
-    observer.observe(element);
-    
-    return () => observer.unobserve(element);
-  }, [handleObserver]);
+    if (
+      !hasSetInitialFocus.current &&
+      !isInitialLoading &&
+      isLoggedIn &&
+      activeTab !== 'home' &&
+      loadedCategories.length > 0
+    ) {
+      setFocus('row-0-card-0');
+      hasSetInitialFocus.current = true;
+    }
+  }, [isInitialLoading, isLoggedIn, activeTab, loadedCategories.length]);
 
-  // Login handler
+  // Carrega mais categorias quando o foco chega na última linha
+  const handleLoadMoreByFocus = useCallback(() => {
+    // Evita chamadas duplicadas ou desnecessárias
+    if (
+      isInitialLoading ||
+      isLoadingMore ||
+      !credentials ||
+      loadedCategories.length >= allCategories.length
+    ) {
+      return;
+    }
+
+    // Carrega o próximo lote começando do tamanho atual da lista carregada
+    loadMoreStreams(
+      credentials,
+      allCategories,
+      loadedCategories.length,
+      getActionParams(activeTab)
+    );
+  }, [
+    isInitialLoading,
+    isLoadingMore,
+    credentials,
+    loadedCategories.length,
+    allCategories,
+    activeTab,
+  ]);
+
+  // Função chamada quando o usuário faz login
   const handleLogin = (data: any) => {
+    // Salva login no navegador
     localStorage.setItem('iptv_login', JSON.stringify(data));
+
+    // Atualiza estados do app
     setCredentials(data);
     setIsLoggedIn(true);
-    // O trigger principal será feito alterando o tab ou re-iniciando o component
-    window.location.reload(); 
+    setActiveTab('home');
+    setIsInitialLoading(false);
   };
 
-  useEffect(() => {
-    // Só inicia o foco quando tivermos os dados montados na tela e o login feito
-    if (!isInitialLoading && isLoggedIn && loadedCategories.length > 0) {
-      setFocus('sidebar');
-    }
-  }, [isInitialLoading, isLoggedIn, loadedCategories.length]);
+  // Tela de loading inicial
+  if (isInitialLoading) {
+    return (
+      <div className="nuvixLoading">
+        <div className="nuvixGlow"></div>
 
-  if (isInitialLoading) return (
-  <div className="nuvixLoading">
-    <div className="nuvixGlow"></div>
+        <div className="nuvixLoaderCard">
+          <h1>Nuvix</h1>
 
-    <div className="nuvixLoaderCard">
-      <h1>Nuvix</h1>
+          <div className="loadingBar">
+            <span></span>
+          </div>
 
-      <div className="loadingBar">
-        <span></span>
+          <p>Carregando sua experiência...</p>
+        </div>
       </div>
+    );
+  }
 
-      <p>Carregando sua experiência...</p>
-    </div>
-  </div>
-);
-if (!isLoggedIn) {
-  return <Login onLogin={handleLogin} />;
-}
+  // Se não estiver logado, mostra tela de login
+  if (!isLoggedIn) {
+    return <Login onLogin={handleLogin} />;
+  }
 
-const heroChannel =
-  loadedCategories.length > 0 &&
-  loadedCategories[0].channels.length > 0
-    ? loadedCategories[0].channels[0]
-    : null;
+  // Tela principal do app
+  return (
+    <main
+      style={{
+        marginLeft: '260px',
+        minHeight: '100vh',
+        transition: 'margin-left 0.28s ease',
+      }}
+    >
+      {/* Barra lateral fixa */}
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
-return (
- <main
-  style={{
-    marginLeft: isSidebarExpanded ? '260px' : '80px',
-    minHeight: '100vh',
-    transition: 'margin-left 0.28s ease'
-  }}
->
-    <Sidebar
-  activeTab={activeTab}
-  onTabChange={setActiveTab}
-  onExpandedChange={setIsSidebarExpanded}
-/>
-
-    <div className="content-wrapper">
-      {heroChannel && <Hero channel={heroChannel} />}
-
-      <div
-        style={{
-          marginTop: '-150px',
-          position: 'relative',
-          zIndex: 10
-        }}
-      >
-        {loadedCategories.map((category) => (
-          <Row
-            key={category.id}
-            title={category.name}
-            channels={category.channels}
-            onChannelClick={(channel) =>
-              setSelectedChannel(channel)
-            }
-          />
-        ))}
-
-        {!isInitialLoading &&
-          loadedCategories.length === 0 && (
-            <div
-              style={{
-                padding: '4rem',
-                textAlign: 'center',
-                color: 'white'
-              }}
-            >
-              <h2>Nenhum conteúdo encontrado.</h2>
-            </div>
-          )}
-
-        <div
-          ref={observerTarget}
-          style={{ height: '50px', width: '100%' }}
-        ></div>
-
-        {isLoadingMore && (
+      <div className="content-wrapper">
+        {activeTab === 'home' ? (
+          // Tela inicial institucional
+          <HomeIntro />
+        ) : (
+          // Tela de listas de conteúdo
           <div
             style={{
-              textAlign: 'center',
-              color: '#8b5cf6',
-              padding: '2rem'
+              marginTop: '3rem',
+              position: 'relative',
+              zIndex: 10,
             }}
           >
-            Carregando mais categorias...
+            {/* Renderiza cada categoria como uma linha */}
+            {loadedCategories.map((category, rowIndex) => (
+              <Row
+                key={category.id}
+                rowIndex={rowIndex}
+                title={category.name}
+                channels={category.channels}
+                isLastRow={rowIndex === loadedCategories.length - 1}
+                onEndReached={handleLoadMoreByFocus}
+                onChannelClick={(channel) => setSelectedChannel(channel)}
+              />
+            ))}
+
+            {/* Mensagem caso nenhuma categoria tenha conteúdo */}
+            {!isInitialLoading && loadedCategories.length === 0 && (
+              <div
+                style={{
+                  padding: '4rem',
+                  textAlign: 'center',
+                  color: 'white',
+                }}
+              >
+                <h2>Nenhum conteúdo encontrado.</h2>
+              </div>
+            )}
+
+            {/* Mensagem durante carregamento de mais categorias */}
+            {isLoadingMore && (
+              <div
+                style={{
+                  textAlign: 'center',
+                  color: '#8b5cf6',
+                  padding: '2rem',
+                }}
+              >
+                Carregando mais categorias...
+              </div>
+            )}
+
+            {/* Indicador visual de que existem mais categorias abaixo */}
+            {loadedCategories.length < allCategories.length && (
+              <div className="scrollDownHint">
+                <span>⌄</span>
+                <p>Mais categorias abaixo</p>
+              </div>
+            )}
           </div>
         )}
       </div>
-    </div>
 
-    {selectedChannel && (
-      <VideoPlayer
-        url={selectedChannel.url}
-        title={selectedChannel.name}
-        onClose={() => setSelectedChannel(null)}
-      />
-    )}
+      {/* Player de vídeo abre quando selectedChannel recebe um item */}
+      {selectedChannel && (
+        <VideoPlayer
+          url={selectedChannel.url}
+          title={selectedChannel.name}
+          onClose={() => setSelectedChannel(null)}
+        />
+      )}
 
-    <style jsx global>{`
-      .content-wrapper {
-        padding-bottom: 5rem;
-      }
+      {/* Estilo global simples da página */}
+      <style jsx global>{`
+        .content-wrapper {
+          padding-bottom: 5rem;
+        }
 
-      body {
-        overflow: ${
-          selectedChannel ? 'hidden' : 'auto'
-        };
-      }
-    `}</style>
-  </main>
-);
+        body {
+          overflow: ${selectedChannel ? 'hidden' : 'auto'};
+        }
+      `}</style>
+    </main>
+  );
 }
