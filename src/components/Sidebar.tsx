@@ -1,87 +1,163 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Home, Tv, Film, PlayCircle, Settings, Search, Heart } from 'lucide-react';
-import { useFocusable, FocusContext } from '@noriginmedia/norigin-spatial-navigation';
+import React, { useEffect } from 'react';
+import {
+  Home,
+  Tv,
+  Film,
+  PlayCircle,
+  Settings,
+  Search,
+  Star,
+  ListVideo,
+} from 'lucide-react';
+import {
+  useFocusable,
+  FocusContext,
+  setFocus,
+} from '@noriginmedia/norigin-spatial-navigation';
 import styles from './Sidebar.module.css';
 
-const menuItems = [
+type MenuItem = {
+  icon: React.ElementType;
+  label: string;
+  id: string;
+  children?: MenuItem[];
+};
+
+type SidebarProps = {
+  activeTab: string;
+  onTabChange: (tabId: string) => void;
+};
+
+type FocusableMenuItemProps = {
+  item: MenuItem;
+  activeTab: string;
+  onTabChange: (tabId: string) => void;
+  isChild?: boolean;
+};
+
+const menuItems: MenuItem[] = [
   { icon: Search, label: 'Busca', id: 'search' },
   { icon: Home, label: 'Início', id: 'home' },
-  { icon: Tv, label: 'TV ao Vivo', id: 'live' },
-  { icon: Film, label: 'Filmes', id: 'movies' },
-  { icon: PlayCircle, label: 'Séries', id: 'series' },
-  { icon: Heart, label: 'Favoritos', id: 'favorites' },
+
+  {
+    icon: Tv,
+    label: 'TV ao Vivo',
+    id: 'live',
+    children: [
+      { icon: ListVideo, label: 'Canais', id: 'live' },
+      { icon: Star, label: 'Favoritos', id: 'live-favorites' },
+    ],
+  },
+
+  {
+    icon: Film,
+    label: 'Filmes',
+    id: 'movies',
+    children: [
+      { icon: ListVideo, label: 'Catálogo', id: 'movies' },
+      { icon: Star, label: 'Favoritos', id: 'movies-favorites' },
+    ],
+  },
+
+  {
+    icon: PlayCircle,
+    label: 'Séries',
+    id: 'series',
+    children: [
+      { icon: ListVideo, label: 'Catálogo', id: 'series' },
+      { icon: Star, label: 'Favoritos', id: 'series-favorites' },
+    ],
+  },
+
   { icon: Settings, label: 'Ajustes', id: 'settings' },
 ];
 
-interface SidebarProps {
-  activeTab: string;
-  onTabChange: (tabId: string) => void;
-  onExpandedChange?: (expanded: boolean) => void;
-}
+function FocusableMenuItem({
+  item,
+  activeTab,
+  onTabChange,
+  isChild = false,
+}: FocusableMenuItemProps) {
+  const isActive =
+    activeTab === item.id ||
+    item.children?.some((child: MenuItem) => child.id === activeTab);
 
-function FocusableMenuItem({ item, activeTab, isExpanded, onTabChange }: any) {
   const { ref, focused } = useFocusable({
-    onEnterPress: () => onTabChange(item.id)
+    focusKey: `sidebar-${item.id}`,
+    onEnterPress: () => onTabChange(item.id),
   });
 
   return (
     <button
       ref={ref}
-      className={`${styles.navItem} ${activeTab === item.id ? styles.active : ''} ${focused ? styles.focused : ''}`}
+      tabIndex={0}
+      className={`
+        ${styles.navItem}
+        ${isChild ? styles.subItem : ''}
+        ${isActive ? styles.active : ''}
+        ${focused ? styles.focused : ''}
+      `}
       onClick={() => onTabChange(item.id)}
       title={item.label}
     >
-      <item.icon size={24} />
-      {isExpanded && <span className={styles.label}>{item.label}</span>}
+      <item.icon size={isChild ? 18 : 24} />
+      <span className={styles.label}>{item.label}</span>
     </button>
   );
 }
 
-export default function Sidebar({ activeTab, onTabChange, onExpandedChange }: SidebarProps) {
-  
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  const { ref, focusKey, hasFocusedChild } = useFocusable({
+export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+  const { ref, focusKey } = useFocusable({
     focusKey: 'sidebar',
     trackChildren: true,
   });
 
-  // Expande a sidebar automaticamente se algum item dela estiver focado via controle remoto
   useEffect(() => {
-    if (hasFocusedChild) {
-      setIsExpanded(true);
-    } else {
-      setIsExpanded(false);
-    }
-  }, [hasFocusedChild]);
-  useEffect(() => {
-  onExpandedChange?.(isExpanded);
-}, [isExpanded, onExpandedChange]);
+    const initialFocusKey = activeTab ? `sidebar-${activeTab}` : 'sidebar-home';
+
+    const timeout = setTimeout(() => {
+      setFocus(initialFocusKey);
+    }, 100);
+
+    return () => clearTimeout(timeout);
+  }, [activeTab]);
 
   return (
     <FocusContext.Provider value={focusKey}>
-      <aside 
+      <aside
         ref={ref}
-        className={`${styles.sidebar} ${isExpanded ? styles.expanded : ''}`}
-        onMouseEnter={() => setIsExpanded(true)}
-        onMouseLeave={() => setIsExpanded(false)}
+        className={`${styles.sidebar} ${styles.expanded}`}
       >
         <div className={styles.logo}>
           <div className={styles.logoIcon}>N</div>
-    {isExpanded && <span className={styles.logoText}>Nuvix</span>}
+          <span className={styles.logoText}>Nuvix</span>
         </div>
 
         <nav className={styles.nav}>
           {menuItems.map((item) => (
-            <FocusableMenuItem 
-              key={item.id} 
-              item={item} 
-              activeTab={activeTab} 
-              isExpanded={isExpanded} 
-              onTabChange={onTabChange} 
-            />
+            <div key={item.id} className={styles.navGroup}>
+              <FocusableMenuItem
+                item={item}
+                activeTab={activeTab}
+                onTabChange={onTabChange}
+              />
+
+              {item.children && (
+                <div className={styles.subMenu}>
+                  {item.children.map((child) => (
+                    <FocusableMenuItem
+                      key={child.id}
+                      item={child}
+                      activeTab={activeTab}
+                      onTabChange={onTabChange}
+                      isChild
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
       </aside>

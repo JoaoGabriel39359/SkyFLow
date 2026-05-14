@@ -1,102 +1,98 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
+// Importa recursos principais do React
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+
+// Importa os componentes visuais do app integrados ao repositório
 import Sidebar from '@/components/Sidebar';
 import Hero from '@/components/Hero';
 import Row from '@/components/Row';
 import VideoPlayer from '@/components/VideoPlayer';
 import { getCategories, getStreams, buildStreamUrl } from '@/lib/iptvEngine';
-import { getDeviceId } from '@/lib/device'; // Nova funcionalidade
+import { getDeviceId } from '@/lib/device'; // Mecanismo de identificação por MAC
 import { init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 
-// Inicializa o controle global das setas do teclado/controle remoto
+// Inicializa o controle global de setas e teclado para Smart TVs
 init({
   debug: false,
-  visualDebug: false
+  visualDebug: false,
 });
 
-const BATCH_SIZE = 3; // Número de categorias carregadas por vez
+// Define a quantidade de linhas de categorias renderizadas por lote (Batch)
+const BATCH_SIZE = 4;
+
+// Componente de Introdução institucional (Recriado fielmente com as classes globais do commit do amigo)
+const HomeIntro = () => (
+  <section className="homeIntro">
+    <div className="homeIntroText">
+      <span className="homeEyebrow">Nuvix Media Player</span>
+      <h1>Entretenimento fluido para todos os momentos.</h1>
+      <p>
+        Organize seus canais, filmes e séries em uma experiência moderna,
+        rápida e pensada para telas grandes.
+      </p>
+    </div>
+
+    {/* Área visual animada da TV mockup com as classes do Git Diff */}
+    <div className="homeHeroVisual">
+      <div className="homePlayerMockup">
+        <div className="homeTvAntenna">
+          <span></span>
+          <span></span>
+        </div>
+        <div className="homeTvAntennaBase"></div>
+        <div className="homePlayerTop">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div className="homePlayerScreen">
+          <div className="nuvixHeroBrand">
+            <div className="nuvixHeroIcon">N</div>
+            <div className="nuvixHeroWord">
+              <span>N</span>uvix
+            </div>
+            <p>Streaming leve, rápido e pensado para TV.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+);
 
 export default function Home() {
+  // Estados de Controle Base e Sincronia da Barra Lateral Fixa
   const [selectedChannel, setSelectedChannel] = useState<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [credentials, setCredentials] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('live');
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState('home'); // Inicia na Home do seu amigo
 
-  // --- NOVOS ESTADOS PARA O SISTEMA DE MAC ---
+  // --- ESTADOS DO SISTEMA DE TRAVA DE ATIVAÇÃO POR MAC ---
   const [isBlocked, setIsBlocked] = useState(true);
   const [activationData, setActivationData] = useState<any>(null);
 
-  // Estados de Carregamento
+  // Estados de Carregamento e Notificações Visuais de Rolagem
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [canScrollDown, setCanScrollDown] = useState(false);
 
-  // Estados de Dados
+  // Estados de Coleções e Categorias IPTV
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [loadedCategories, setLoadedCategories] = useState<any[]>([]);
 
+  // Referência para manipulação do DOM (Fallback do scroll antigo)
   const observerTarget = useRef<HTMLDivElement>(null);
 
-  // Determinar parâmetros com base na aba ativa
+  // Mapeia os parâmetros de requisição com base na aba de mídia ativa
   const getActionParams = (tab: string) => {
-    if (tab === 'movies') return { cat: 'get_vod_categories', stream: 'get_vod_streams', type: 'vod' as const };
-    if (tab === 'series') return { cat: 'get_series_categories', stream: 'get_series', type: 'series' as const };
+    if (tab.includes('movies')) return { cat: 'get_vod_categories', stream: 'get_vod_streams', type: 'vod' as const };
+    if (tab.includes('series')) return { cat: 'get_series_categories', stream: 'get_series', type: 'series' as const };
     return { cat: 'get_live_categories', stream: 'get_live_streams', type: 'live' as const };
   };
 
-  // 1. Carregamento Inicial (MODIFICADO PARA USAR SUA API)
-  useEffect(() => {
-    const initData = async () => {
-      const deviceId = getDeviceId();
-      setIsInitialLoading(true);
-
-      try {
-        // Chamada para o seu Backend FastAPI
-        const response = await fetch(`http://localhost:8000/api/v1/devices/check-device`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mac: deviceId })
-        });
-
-        const data = await response.json();
-
-        if (data.status === 'active') {
-          // Se o backend liberou, usamos as credenciais que vieram do banco
-          const creds = data.credentials;
-          setCredentials(creds);
-          setIsLoggedIn(true);
-          setIsBlocked(false);
-
-          // Lógica original de reset de listas
-          setAllCategories([]);
-          setLoadedCategories([]);
-
-          const params = getActionParams(activeTab);
-          const rawCats = await getCategories(creds.url, creds.user, creds.pass, params.cat);
-          const cats = Array.isArray(rawCats) ? rawCats : [];
-          setAllCategories(cats);
-
-          // Carrega streams para a primeira leva de categorias
-          await loadMoreStreams(creds, cats, 0, params);
-        } else {
-          // Se não ativado, mostra os dados na tela de bloqueio
-          setActivationData(data);
-          setIsBlocked(true);
-          setIsLoggedIn(false);
-        }
-      } catch (error) {
-        console.error("Erro no carregamento inicial/ativação:", error);
-      } finally {
-        setIsInitialLoading(false);
-      }
-    };
-
-    initData();
-  }, [activeTab]);
-
-  // 2. Lógica para buscar os canais de um lote (batch) de categorias (INTEGRALMENTE MANTIDO)
-  const loadMoreStreams = async (creds: any, fullCatList: any[], startIndex: number, params: any) => {
+  // Carregador assíncrono de lotes de canais por categoria (Batch System)
+  const loadMoreStreams = useCallback(async (creds: any, fullCatList: any[], startIndex: number, params: any) => {
     const catsToLoad = fullCatList.slice(startIndex, startIndex + BATCH_SIZE);
     if (catsToLoad.length === 0) return;
 
@@ -135,17 +131,122 @@ export default function Home() {
     } finally {
       setIsLoadingMore(false);
     }
-  };
+  }, []);
 
-  // 3. Intersection Observer (INTEGRALMENTE MANTIDO)
-  const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
-    const [target] = entries;
-    if (target.isIntersecting && !isInitialLoading && !isLoadingMore && loadedCategories.length < allCategories.length && credentials) {
-      loadMoreStreams(credentials, allCategories, loadedCategories.length, getActionParams(activeTab));
-    }
-  }, [isInitialLoading, isLoadingMore, loadedCategories.length, allCategories, credentials, activeTab]);
-
+  // 1. CHECAGEM INICIAL DE ACESSO (Executado uma única vez ao iniciar o aplicativo)
   useEffect(() => {
+    const checkDeviceSecurity = async () => {
+      const deviceId = getDeviceId();
+      setIsInitialLoading(true);
+
+      try {
+        const response = await fetch(`http://localhost:8000/api/v1/devices/check-device`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mac: deviceId })
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'active') {
+          setCredentials(data.credentials);
+          setIsLoggedIn(true);
+          setIsBlocked(false);
+        } else {
+          setActivationData(data);
+          setIsBlocked(true);
+          setIsLoggedIn(false);
+        }
+      } catch (error) {
+        console.error("Erro ao conectar no servidor de checagem:", error);
+        setActivationData({ mac: deviceId, device_key: 'ERRO_BACKEND' });
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+
+    checkDeviceSecurity();
+  }, []);
+
+  // 2. NAVEGAÇÃO DE CONTEÚDO (Alterna as mídias IPTV)
+  useEffect(() => {
+    if (!isLoggedIn || !credentials) return;
+
+    const updateViewContent = async () => {
+      if (activeTab === 'home' || activeTab === 'search' || activeTab === 'settings') {
+        setAllCategories([]);
+        setLoadedCategories([]);
+        return;
+      }
+
+      setAllCategories([]);
+      setLoadedCategories([]);
+
+      try {
+        const params = getActionParams(activeTab);
+        const rawCats = await getCategories(credentials.url, credentials.user, credentials.pass, params.cat);
+        const cats = Array.isArray(rawCats) ? rawCats : [];
+        setAllCategories(cats);
+
+        await loadMoreStreams(credentials, cats, 0, params);
+      } catch (error) {
+        console.error("Erro na carga de mudança de aba:", error);
+      }
+    };
+
+    updateViewContent();
+  }, [activeTab, isLoggedIn, credentials, loadMoreStreams]);
+
+  // TV: Carrega o próximo bloco de categorias de forma nativa quando o controle focar na última linha
+  const handleLoadMoreByFocus = useCallback(() => {
+    if (isInitialLoading || isLoadingMore || !credentials || loadedCategories.length >= allCategories.length) {
+      return;
+    }
+    loadMoreStreams(credentials, allCategories, loadedCategories.length, getActionParams(activeTab));
+  }, [isInitialLoading, isLoadingMore, credentials, loadedCategories.length, allCategories, activeTab, loadMoreStreams]);
+
+  // 3. Monitoramento visual do indicador "Mais categorias abaixo" trazido pelo seu amigo
+  useEffect(() => {
+    const checkCanScrollDown = () => {
+      const pageHeight = document.documentElement.scrollHeight;
+      const screenHeight = window.innerHeight;
+      const currentScroll = window.scrollY;
+
+      const hasVerticalScroll = pageHeight > screenHeight + 80;
+      const isNearBottom = currentScroll + screenHeight >= pageHeight - 120;
+
+      setCanScrollDown(
+        activeTab !== 'home' &&
+        activeTab !== 'search' &&
+        activeTab !== 'settings' &&
+        !selectedChannel &&
+        hasVerticalScroll &&
+        !isNearBottom
+      );
+    };
+
+    checkCanScrollDown();
+    const timeout = setTimeout(checkCanScrollDown, 300);
+
+    window.addEventListener('scroll', checkCanScrollDown, { passive: true });
+    window.addEventListener('resize', checkCanScrollDown);
+
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('scroll', checkCanScrollDown);
+      window.removeEventListener('resize', checkCanScrollDown);
+    };
+  }, [activeTab, selectedChannel, loadedCategories.length, isLoadingMore]);
+
+  // 4. Intersection Observer para scroll tradicional com mouse
+  useEffect(() => {
+    const handleObserver = (entries: IntersectionObserverEntry[]) => {
+      const [target] = entries;
+      if (target.isIntersecting && !isInitialLoading && !isLoadingMore && loadedCategories.length < allCategories.length && credentials) {
+        loadMoreStreams(credentials, allCategories, loadedCategories.length, getActionParams(activeTab));
+      }
+    };
+
     const element = observerTarget.current;
     if (!element) return;
 
@@ -153,16 +254,17 @@ export default function Home() {
     observer.observe(element);
 
     return () => observer.unobserve(element);
-  }, [handleObserver]);
+  }, [isInitialLoading, isLoadingMore, loadedCategories.length, allCategories, credentials, activeTab, loadMoreStreams]);
 
-  // Efeito de Foco (INTEGRALMENTE MANTIDO)
+  // 5. Aciona o foco remoto inicial diretamente no menu
   useEffect(() => {
-    if (!isInitialLoading && isLoggedIn && !isBlocked && loadedCategories.length > 0) {
+    if (!isInitialLoading && isLoggedIn && !isBlocked) {
       setFocus('sidebar');
     }
-  }, [isInitialLoading, isLoggedIn, isBlocked, loadedCategories.length]);
+  }, [isInitialLoading, isLoggedIn, isBlocked]);
 
-  // --- RENDERS ---
+
+  // --- RENDERS CONDICIONAIS ---
 
   if (isInitialLoading) return (
     <div className="nuvixLoading">
@@ -175,7 +277,6 @@ export default function Home() {
     </div>
   );
 
-  // TELA DE BLOQUEIO (Substitui o seu antigo if(!isLoggedIn))
   if (isBlocked) {
     return (
       <div className="nuvixLoading">
@@ -188,7 +289,7 @@ export default function Home() {
             <small style={{ color: '#666' }}>CÓDIGO DE ATIVAÇÃO:</small><br />
             <code style={{ fontSize: '1.4rem', color: '#fff' }}>{activationData?.device_key}</code>
           </div>
-          <p style={{ fontSize: '0.9rem', opacity: 0.7 }}>Envie esses dados para seu revendedor liberar seu acesso.</p>
+          <p style={{ fontSize: '0.9rem', opacity: 0.7 }}>Envie esses dados para seu revendedor liberar seu acesso de 1 ano.</p>
         </div>
       </div>
     );
@@ -198,40 +299,68 @@ export default function Home() {
     ? loadedCategories[0].channels[0] : null;
 
   return (
-    <main style={{ marginLeft: isSidebarExpanded ? '260px' : '80px', minHeight: '100vh', transition: 'margin-left 0.28s ease' }}>
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onExpandedChange={setIsSidebarExpanded} />
+    // Como a Sidebar dele agora é FIXA e SEMPRE ABERTA (260px), empurramos o main usando padding fixo à esquerda!
+    <main
+      style={{
+        paddingLeft: '260px',
+        width: '100vw',
+        minHeight: '100vh',
+        backgroundColor: '#0a0a0a'
+      }}
+    >
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <div className="content-wrapper">
-        {heroChannel && <Hero channel={heroChannel} />}
+      {activeTab === 'home' ? (
+        <HomeIntro />
+      ) : (
+        <section style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+          {heroChannel && <Hero channel={heroChannel} />}
 
-        <div style={{ marginTop: '-150px', position: 'relative', zIndex: 10 }}>
-          {loadedCategories.map((category) => (
-            <Row key={category.id} title={category.name} channels={category.channels} onChannelClick={(channel) => setSelectedChannel(channel)} />
-          ))}
+          <div style={{ marginTop: heroChannel ? '-150px' : '20px', position: 'relative', zIndex: 10, width: '100%' }}>
+            {loadedCategories.map((category, index) => (
+              // Integrado com os novos parâmetros obrigatórios do Row.tsx do seu amigo
+              <Row
+                key={category.id}
+                title={category.name}
+                channels={category.channels}
+                rowIndex={index}
+                isLastRow={index === loadedCategories.length - 1}
+                onEndReached={handleLoadMoreByFocus}
+                onChannelClick={(channel: any) => setSelectedChannel(channel)}
+              />
+            ))}
 
-          {!isInitialLoading && loadedCategories.length === 0 && (
-            <div style={{ padding: '4rem', textAlign: 'center', color: 'white' }}>
-              <h2>Nenhum conteúdo encontrado.</h2>
-            </div>
-          )}
+            {loadedCategories.length === 0 && (
+              <div style={{ padding: '4rem', textAlign: 'center', color: 'white' }}>
+                <h2>Nenhum conteúdo encontrado nesta categoria.</h2>
+              </div>
+            )}
 
-          <div ref={observerTarget} style={{ height: '50px', width: '100%' }}></div>
+            <div ref={observerTarget} style={{ height: '50px', width: '100%' }}></div>
 
-          {isLoadingMore && (
-            <div style={{ textAlign: 'center', color: '#8b5cf6', padding: '2rem' }}>
-              Carregando mais categorias...
-            </div>
-          )}
+            {isLoadingMore && (
+              <div style={{ textAlign: 'center', color: '#8b5cf6', padding: '2rem' }}>
+                Carregando mais conteúdos...
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Indicador de rolagem do seu amigo com posicionamento fixo do commit */}
+      {canScrollDown && (
+        <div className="scrollDownHint">
+          <span>⌄</span>
+          <p>Mais categorias abaixo</p>
         </div>
-      </div>
+      )}
 
       {selectedChannel && (
         <VideoPlayer url={selectedChannel.url} title={selectedChannel.name} onClose={() => setSelectedChannel(null)} />
       )}
 
       <style jsx global>{`
-        .content-wrapper { padding-bottom: 5rem; }
-        body { overflow: ${selectedChannel ? 'hidden' : 'auto'}; }
+        body { overflow: ${selectedChannel ? 'hidden' : 'auto'}; background-color: #000; color: #fff; }
       `}</style>
     </main>
   );

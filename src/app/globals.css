@@ -160,3 +160,284 @@ body {
     transform: scale(1.12);
   }
 }
+.homeIntro {
+  min-height: 100vh;
+  padding: 8rem 6vw;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  align-items: center;
+  gap: 4rem;
+  background:
+    radial-gradient(circle at 70% 35%, rgba(139, 92, 246, 0.22), transparent 34%),
+    linear-gradient(135deg, #05050c, #020208);
+}
+
+.homeIntroText {
+  max-width: 780px;
+}
+
+.homeEyebrow {
+  display: inline-flex;
+  margin-bottom: 1.4rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  color: #d9ccff;
+  background: rgba(139, 92, 246, 0.14);
+  border: 1px solid rgba(139, 92, 246, 0.24);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.homeIntro h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(3.5rem, 6vw, 7.5rem);
+  line-height: 0.95;
+  letter-spacing: -0.08em;
+  font-weight: 950;
+  text-shadow: 0 0 50px rgba(139, 92, 246, 0.28);
+}
+
+.homeIntro p {
+  max-width: 620px;
+  margin-top: 1.8rem;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 1.25rem;
+  line-height: 1.55;
+}
+
+  .homeHeroVisual {
+  min-height: 420px;
+  border-radius: 34px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(139, 92, 246, 0.22), transparent 46%),
+    linear-gradient(145deg, rgba(10, 10, 26, 0.98), rgba(2, 2, 8, 0.98));
+  border: 1px solid rgba(139, 92, 246, 0.22);
+  box-shadow:
+    0 32px 90px rgba(0, 0, 0, 0.58),
+    0 0 70px rgba(139, 92, 246, 0.14);
+  position: relative;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.homeHeroVisual::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 55% 35%, rgba(91, 140, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 35% 70%, rgba(139, 92, 246, 0.16), transparent 32%);
+  opacity: 0.9;
+}
+
+.homePlayerMockup {
+  position: relative;
+  width: 82%;
+  max-width: 620px;
+  min-height: 345px;
+  border-radius: 30px;
+  background:
+    linear-gradient(145deg, rgba(18, 18, 42, 0.72), rgba(4, 4, 14, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.55),
+    inset 0 0 60px rgba(139, 92, 246, 0.05);
+  padding: 1.25rem;
+  z-index: 2;
+  overflow: visible;
+}
+.homeTvAntenna {
+  position: absolute;
+  top: -116px;
+  left: 50%;
+  width: 260px;
+  height: 130px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.homeTvAntenna span {
+  position: absolute;
+  bottom: 0;
+  width: 3px;
+  height: 135px;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(180, 150, 255, 0.95),
+    rgba(91, 140, 255, 0.35)
+  );
+  box-shadow:
+    0 0 12px rgba(139, 92, 246, 0.55),
+    0 0 28px rgba(139, 92, 246, 0.18);
+  transform-origin: bottom center;
+}
+
+.homeTvAntenna span:first-child {
+  left: 54px;
+  transform: rotate(-42deg);
+}
+
+.homeTvAntenna span:last-child {
+  right: 54px;
+  transform: rotate(42deg);
+}
+
+.homeTvAntenna span::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, #a78bfa 0%, #5b8cff 70%);
+  box-shadow:
+    0 0 16px rgba(139, 92, 246, 0.65),
+    0 0 32px rgba(91, 140, 255, 0.25);
+}
+
+.homeTvAntennaBase {
+  position: absolute;
+  top: -35px;
+  left: 50%;
+  width: 112px;
+  height: 56px;
+  transform: translateX(-50%);
+  border-radius: 108px 108px 0 0;
+  background:
+    radial-gradient(circle at 50% 15%, rgba(139, 92, 246, 0.45), transparent 55%),
+    linear-gradient(180deg, rgba(31, 25, 66, 0.98), rgba(8, 8, 20, 0.98));
+  border: 1px solid rgba(139, 92, 246, 0.26);
+  border-bottom: none;
+  box-shadow:
+    0 0 28px rgba(139, 92, 246, 0.26),
+    inset 0 0 22px rgba(255, 255, 255, 0.04);
+  z-index: 1;
+}
+
+.homePlayerTop {
+  display: flex;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.homePlayerTop span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.homePlayerScreen {
+  height: 255px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at center, rgba(139, 92, 246, 0.2), transparent 56%),
+    linear-gradient(135deg, rgba(20, 20, 46, 0.88), rgba(5, 5, 14, 0.98));
+  border: 1px solid rgba(139, 92, 246, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.nuvixHeroBrand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(2px);
+}
+
+.nuvixHeroIcon {
+  width: 92px;
+  height: 92px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #8b5cf6, #5b8cff);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.4rem;
+  font-weight: 900;
+  box-shadow:
+    0 0 35px rgba(139, 92, 246, 0.5),
+    0 18px 45px rgba(0, 0, 0, 0.45);
+  margin-bottom: 1rem;
+}
+
+.nuvixHeroWord {
+  font-size: 4rem;
+  font-weight: 900;
+  letter-spacing: -0.08em;
+  color: #fff;
+  text-shadow: 0 0 28px rgba(139, 92, 246, 0.32);
+}
+
+.nuvixHeroWord span {
+  background: linear-gradient(135deg, #8b5cf6, #5b8cff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.nuvixHeroBrand p {
+  margin-top: 0.9rem;
+  margin-bottom: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.scrollDownHint {
+  position: fixed;
+  left: 260px;
+  right: 0;
+  bottom: 1.4rem;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  opacity: 0.9;
+  animation: scrollHintPulse 1.4s ease-in-out infinite;
+}
+
+.scrollDownHint span {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 2rem;
+  line-height: 1;
+  background: rgba(139, 92, 246, 0.22);
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  box-shadow: 0 0 28px rgba(139, 92, 246, 0.32);
+}
+
+.scrollDownHint p {
+  margin: 0.35rem 0 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+@keyframes scrollHintPulse {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.65;
+  }
+
+  50% {
+    transform: translateY(6px);
+    opacity: 1;
+  }
+}
