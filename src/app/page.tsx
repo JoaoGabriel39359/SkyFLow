@@ -2,7 +2,7 @@
 'use client';
 
 // Importa recursos principais do React
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // Importa os componentes visuais do app integrados ao repositório
 import Sidebar from '@/components/Sidebar';
@@ -11,7 +11,7 @@ import Row from '@/components/Row';
 import VideoPlayer from '@/components/VideoPlayer';
 import { getCategories, getStreams, buildStreamUrl } from '@/lib/iptvEngine';
 import { getDeviceId } from '@/lib/device'; // Mecanismo de identificação por MAC
-import { init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { init, setFocus, useFocusable, FocusContext } from '@noriginmedia/norigin-spatial-navigation';
 
 // Inicializa o controle global de setas e teclado para Smart TVs
 init({
@@ -61,6 +61,93 @@ const HomeIntro = () => (
   </section>
 );
 
+type LogoutConfirmModalProps = {
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+type LogoutConfirmButtonProps = {
+  className: string;
+  focusKey: string;
+  onPress: () => void;
+  children: React.ReactNode;
+};
+
+function LogoutConfirmButton({ className, focusKey, onPress, children }: LogoutConfirmButtonProps) {
+  const { ref, focused } = useFocusable({
+    focusKey,
+    onEnterPress: onPress,
+  });
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={`${className} ${focused ? 'modalButtonFocused' : ''}`}
+      onClick={onPress}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LogoutConfirmModal({ onCancel, onConfirm }: LogoutConfirmModalProps) {
+  const { ref, focusKey } = useFocusable({
+    focusKey: 'logout-confirm-modal',
+    trackChildren: true,
+  });
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setFocus('logout-confirm-cancel');
+    }, 0);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' || event.key === 'Backspace') {
+        event.preventDefault();
+        onCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onCancel]);
+
+  return (
+    <FocusContext.Provider value={focusKey}>
+      <div className="logoutModalOverlay" role="presentation">
+        <div className="logoutModal" ref={ref} role="dialog" aria-modal="true" aria-labelledby="logout-modal-title">
+          <div className="logoutModalIcon">N</div>
+          <h2 id="logout-modal-title">Deseja realmente sair?</h2>
+          <p>Ao confirmar, este dispositivo volta para a tela de ativacao do codigo.</p>
+
+          <div className="logoutModalActions">
+            <LogoutConfirmButton
+              className="modalButton modalButtonGhost"
+              focusKey="logout-confirm-cancel"
+              onPress={onCancel}
+            >
+              Cancelar
+            </LogoutConfirmButton>
+
+            <LogoutConfirmButton
+              className="modalButton modalButtonDanger"
+              focusKey="logout-confirm-confirm"
+              onPress={onConfirm}
+            >
+              Deslogar
+            </LogoutConfirmButton>
+          </div>
+        </div>
+      </div>
+    </FocusContext.Provider>
+  );
+}
+
 export default function Home() {
   // Estados de Controle Base e Sincronia da Barra Lateral Fixa
   const [selectedChannel, setSelectedChannel] = useState<any>(null);
@@ -76,6 +163,7 @@ export default function Home() {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   // Estados de Coleções e Categorias IPTV
   const [allCategories, setAllCategories] = useState<any[]>([]);
@@ -84,6 +172,41 @@ export default function Home() {
   // Referência para manipulação do DOM (Fallback do scroll antigo)
   const observerTarget = useRef<HTMLDivElement>(null);
   const hasSetInitialFocus = useRef(false);
+
+  const checkDeviceSecurity = useCallback(async () => {
+    const deviceId = getDeviceId();
+    setIsInitialLoading(true);
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/devices/check-device`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac: deviceId })
+      });
+
+      const data = await response.json();
+
+      if (data.status === 'active') {
+        setCredentials(data.credentials);
+        setIsLoggedIn(true);
+        setIsBlocked(false);
+        setActivationData(null);
+      } else {
+        setActivationData(data);
+        setCredentials(null);
+        setIsBlocked(true);
+        setIsLoggedIn(false);
+      }
+    } catch (error) {
+      console.error("Erro ao conectar no servidor de checagem:", error);
+      setActivationData({ mac: deviceId, device_key: 'ERRO_BACKEND' });
+      setCredentials(null);
+      setIsBlocked(true);
+      setIsLoggedIn(false);
+    } finally {
+      setIsInitialLoading(false);
+    }
+  }, []);
 
   // Mapeia os parâmetros de requisição com base na aba de mídia ativa
   const getActionParams = (tab: string) => {
@@ -136,38 +259,24 @@ export default function Home() {
 
   // 1. CHECAGEM INICIAL DE ACESSO (Executado uma única vez ao iniciar o aplicativo)
   useEffect(() => {
-    const checkDeviceSecurity = async () => {
-      const deviceId = getDeviceId();
-      setIsInitialLoading(true);
+    const timeout = window.setTimeout(() => {
+      checkDeviceSecurity();
+    }, 0);
 
-      try {
-        const response = await fetch(`http://localhost:8000/api/v1/devices/check-device`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mac: deviceId })
-        });
+    return () => window.clearTimeout(timeout);
+  }, [checkDeviceSecurity]);
 
-        const data = await response.json();
-
-        if (data.status === 'active') {
-          setCredentials(data.credentials);
-          setIsLoggedIn(true);
-          setIsBlocked(false);
-        } else {
-          setActivationData(data);
-          setIsBlocked(true);
-          setIsLoggedIn(false);
-        }
-      } catch (error) {
-        console.error("Erro ao conectar no servidor de checagem:", error);
-        setActivationData({ mac: deviceId, device_key: 'ERRO_BACKEND' });
-      } finally {
-        setIsInitialLoading(false);
-      }
-    };
-
+  const handleLogout = useCallback(() => {
+    setIsLogoutConfirmOpen(false);
+    localStorage.removeItem('skyflow_device_id');
+    hasSetInitialFocus.current = false;
+    setSelectedChannel(null);
+    setActiveTab('home');
+    setAllCategories([]);
+    setLoadedCategories([]);
+    setCanScrollDown(false);
     checkDeviceSecurity();
-  }, []);
+  }, [checkDeviceSecurity]);
 
   // 2. NAVEGAÇÃO DE CONTEÚDO (Alterna as mídias IPTV)
   useEffect(() => {
@@ -265,6 +374,33 @@ export default function Home() {
     }
   }, [isInitialLoading, isLoggedIn, isBlocked]);
 
+  const playableChannels = useMemo(
+    () => loadedCategories.flatMap((category) => category.channels),
+    [loadedCategories]
+  );
+
+  const selectedChannelIndex = selectedChannel
+    ? playableChannels.findIndex((channel) => channel.url === selectedChannel.url)
+    : -1;
+
+  const handleClosePlayer = useCallback(() => {
+    setSelectedChannel(null);
+    window.setTimeout(() => {
+      setFocus('sidebar');
+    }, 0);
+  }, []);
+
+  const handlePreviousChannel = useCallback(() => {
+    if (selectedChannelIndex > 0) {
+      setSelectedChannel(playableChannels[selectedChannelIndex - 1]);
+    }
+  }, [playableChannels, selectedChannelIndex]);
+
+  const handleNextChannel = useCallback(() => {
+    if (selectedChannelIndex >= 0 && selectedChannelIndex < playableChannels.length - 1) {
+      setSelectedChannel(playableChannels[selectedChannelIndex + 1]);
+    }
+  }, [playableChannels, selectedChannelIndex]);
 
   // --- RENDERS CONDICIONAIS ---
 
@@ -310,7 +446,7 @@ export default function Home() {
         backgroundColor: '#0a0a0a'
       }}
     >
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onLogout={() => setIsLogoutConfirmOpen(true)} />
 
       {activeTab === 'home' ? (
         <HomeIntro />
@@ -359,7 +495,22 @@ export default function Home() {
       )}
 
       {selectedChannel && (
-        <VideoPlayer url={selectedChannel.url} title={selectedChannel.name} onClose={() => setSelectedChannel(null)} />
+        <VideoPlayer
+          url={selectedChannel.url}
+          title={selectedChannel.name}
+          onClose={handleClosePlayer}
+          onPrevious={handlePreviousChannel}
+          onNext={handleNextChannel}
+          hasPrevious={selectedChannelIndex > 0}
+          hasNext={selectedChannelIndex >= 0 && selectedChannelIndex < playableChannels.length - 1}
+        />
+      )}
+
+      {isLogoutConfirmOpen && (
+        <LogoutConfirmModal
+          onCancel={() => setIsLogoutConfirmOpen(false)}
+          onConfirm={handleLogout}
+        />
       )}
 
       <style jsx global>{`
