@@ -1,0 +1,71 @@
+.container {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+.title {
+    font-size: 1.875rem;
+    font-weight: 900;
+    margin-bottom: 2rem;
+}
+
+.tableWrapper {
+    background-color: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 32px;
+    overflow: hidden;
+}
+
+.table {
+    width: 100%;
+    text-align: left;
+    border-collapse: collapse;
+}
+
+.thead {
+    background-color: rgba(255, 255, 255, 0.05);
+    font-size: 10px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #6b7280;
+    letter-spacing: 0.1em;
+}
+
+.th {
+    padding: 1.5rem;
+}
+
+.tbody tr {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background-color 0.2s;
+}
+
+.tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.td {
+    padding: 1.5rem;
+}
+
+.macAddress {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    color: #8b5cf6;
+    font-weight: 700;
+}
+
+.user {
+    color: #d1d5db;
+}
+
+.date {
+    color: #6b7280;
+}
+
+.statusBadge {
+    background-color: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+    font-size: 10px;
+    font-weight: 900;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+}

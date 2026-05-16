@@ -1,0 +1,21 @@
+.container {
+    display: flex;
+    min-height: 100vh;
+    background-color: #050505;
+    color: white;
+}
+.container ::selection {
+    background-color: rgba(139, 92, 246, 0.3);
+}
+
+.main {
+    flex: 1;
+    padding: 2.5rem;
+    overflow-y: auto;
+}
+
+.content {
+    max-width: 64rem;
+    margin-left: auto;
+    margin-right: auto;
+}

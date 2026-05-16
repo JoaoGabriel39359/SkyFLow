@@ -1,0 +1,55 @@
+.container {
+    animation: fadeIn 0.7s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.title {
+    font-size: 2.25rem;
+    font-weight: 900;
+    margin-bottom: 2.5rem;
+    letter-spacing: -0.025em;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.5rem;
+}
+
+.card {
+    background-color: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 2rem;
+    border-radius: 32px;
+}
+
+.cardFlex {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cardLabel {
+    color: #6b7280;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.cardValue {
+    font-size: 3rem;
+    font-weight: 900;
+}
+
+.purpleText {
+    color: #8b5cf6;
+}
+
+.goldText {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: #fbbf24;
+}
