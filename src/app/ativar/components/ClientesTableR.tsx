@@ -1,6 +1,11 @@
 import styles from './ClientesTable.module.css';
+import type { ResellerDevice } from '../types';
 
-export default function ClientesTable({ devices }: any) {
+type ClientesTableProps = {
+    devices: ResellerDevice[];
+};
+
+export default function ClientesTable({ devices }: ClientesTableProps) {
     return (
         <div className={styles.container}>
             <h2 className={styles.title}>Gestão de Clientes</h2>
@@ -15,7 +20,7 @@ export default function ClientesTable({ devices }: any) {
                         </tr>
                     </thead>
                     <tbody className={styles.tbody}>
-                        {devices.map((d: any) => (
+                        {devices.map((d) => (
                             <tr key={d.mac_address}>
                                 <td className={`${styles.td} ${styles.macAddress}`}>{d.mac_address}</td>
                                 <td className={`${styles.td} ${styles.user}`}>{d.iptv_user}</td>

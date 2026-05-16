@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   Home,
   Tv,
@@ -14,7 +14,6 @@ import {
 import {
   useFocusable,
   FocusContext,
-  setFocus,
 } from '@noriginmedia/norigin-spatial-navigation';
 import styles from './Sidebar.module.css';
 
@@ -22,6 +21,7 @@ type MenuItem = {
   icon: React.ElementType;
   label: string;
   id: string;
+  focusKey: string;
   children?: MenuItem[];
 };
 
@@ -38,16 +38,17 @@ type FocusableMenuItemProps = {
 };
 
 const menuItems: MenuItem[] = [
-  { icon: Search, label: 'Busca', id: 'search' },
-  { icon: Home, label: 'Início', id: 'home' },
+  { icon: Search, label: 'Busca', id: 'search', focusKey: 'sidebar-search' },
+  { icon: Home, label: 'Início', id: 'home', focusKey: 'sidebar-home' },
 
   {
     icon: Tv,
     label: 'TV ao Vivo',
     id: 'live',
+    focusKey: 'sidebar-live',
     children: [
-      { icon: ListVideo, label: 'Canais', id: 'live' },
-      { icon: Star, label: 'Favoritos', id: 'live-favorites' },
+      { icon: ListVideo, label: 'Canais', id: 'live', focusKey: 'sidebar-live-catalog' },
+      { icon: Star, label: 'Favoritos', id: 'live-favorites', focusKey: 'sidebar-live-favorites' },
     ],
   },
 
@@ -55,9 +56,10 @@ const menuItems: MenuItem[] = [
     icon: Film,
     label: 'Filmes',
     id: 'movies',
+    focusKey: 'sidebar-movies',
     children: [
-      { icon: ListVideo, label: 'Catálogo', id: 'movies' },
-      { icon: Star, label: 'Favoritos', id: 'movies-favorites' },
+      { icon: ListVideo, label: 'Catálogo', id: 'movies', focusKey: 'sidebar-movies-catalog' },
+      { icon: Star, label: 'Favoritos', id: 'movies-favorites', focusKey: 'sidebar-movies-favorites' },
     ],
   },
 
@@ -65,13 +67,14 @@ const menuItems: MenuItem[] = [
     icon: PlayCircle,
     label: 'Séries',
     id: 'series',
+    focusKey: 'sidebar-series',
     children: [
-      { icon: ListVideo, label: 'Catálogo', id: 'series' },
-      { icon: Star, label: 'Favoritos', id: 'series-favorites' },
+      { icon: ListVideo, label: 'Catálogo', id: 'series', focusKey: 'sidebar-series-catalog' },
+      { icon: Star, label: 'Favoritos', id: 'series-favorites', focusKey: 'sidebar-series-favorites' },
     ],
   },
 
-  { icon: Settings, label: 'Ajustes', id: 'settings' },
+  { icon: Settings, label: 'Ajustes', id: 'settings', focusKey: 'sidebar-settings' },
 ];
 
 function FocusableMenuItem({
@@ -85,7 +88,7 @@ function FocusableMenuItem({
     item.children?.some((child: MenuItem) => child.id === activeTab);
 
   const { ref, focused } = useFocusable({
-    focusKey: `sidebar-${item.id}`,
+    focusKey: item.focusKey,
     onEnterPress: () => onTabChange(item.id),
   });
 
@@ -114,16 +117,6 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
     trackChildren: true,
   });
 
-  useEffect(() => {
-    const initialFocusKey = activeTab ? `sidebar-${activeTab}` : 'sidebar-home';
-
-    const timeout = setTimeout(() => {
-      setFocus(initialFocusKey);
-    }, 100);
-
-    return () => clearTimeout(timeout);
-  }, [activeTab]);
-
   return (
     <FocusContext.Provider value={focusKey}>
       <aside
@@ -137,7 +130,7 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 
         <nav className={styles.nav}>
           {menuItems.map((item) => (
-            <div key={item.id} className={styles.navGroup}>
+            <div key={item.focusKey} className={styles.navGroup}>
               <FocusableMenuItem
                 item={item}
                 activeTab={activeTab}
@@ -148,7 +141,7 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
                 <div className={styles.subMenu}>
                   {item.children.map((child) => (
                     <FocusableMenuItem
-                      key={child.id}
+                      key={child.focusKey}
                       item={child}
                       activeTab={activeTab}
                       onTabChange={onTabChange}

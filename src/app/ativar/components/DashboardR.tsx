@@ -1,6 +1,12 @@
 import styles from './Dashboard.module.css';
+import type { ResellerDevice } from '../types';
 
-export default function Dashboard({ devices, credits }: any) {
+type DashboardProps = {
+    devices: ResellerDevice[];
+    credits: number | null;
+};
+
+export default function Dashboard({ devices, credits }: DashboardProps) {
     return (
         <div className={styles.container}>
             <h2 className={styles.title}>Dashboard</h2>

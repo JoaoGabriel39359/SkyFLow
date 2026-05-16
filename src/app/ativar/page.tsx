@@ -1,31 +1,38 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import styles from './page.module.css';
 import Sidebar from './components/SidebarR';
 import Dashboard from './components/DashboardR';
 import AtivarForm from './components/AtivarFormR';
 import ClientesTable from './components/ClientesTableR';
 import Pagamento from './components/PagamentoR';
+import type { ResellerDevice, ResellerTab } from './types';
 
 export default function PainelRevendedor() {
-    const [activeTab, setActiveTab] = useState('home');
+    const [activeTab, setActiveTab] = useState<ResellerTab>('home');
     const [resellerCredits, setResellerCredits] = useState<number | null>(null);
-    const [devices, setDevices] = useState([]);
+    const [devices, setDevices] = useState<ResellerDevice[]>([]);
 
-    const refreshData = async () => {
+    const refreshData = useCallback(async () => {
         try {
             const response = await fetch(`http://localhost:8000/api/v1/devices/list/ADMIN`);
             if (response.ok) {
-                const data = await response.json();
+                const data = await response.json() as ResellerDevice[];
                 setDevices(data);
                 setResellerCredits(prev => prev ?? 10);
             }
         } catch (error) {
             console.error("Erro ao sincronizar dados:", error);
         }
-    };
+    }, []);
 
-    useEffect(() => { refreshData(); }, []);
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            refreshData();
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [refreshData]);
 
     return (
         <div className={styles.container}>

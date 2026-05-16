@@ -83,6 +83,7 @@ export default function Home() {
 
   // Referência para manipulação do DOM (Fallback do scroll antigo)
   const observerTarget = useRef<HTMLDivElement>(null);
+  const hasSetInitialFocus = useRef(false);
 
   // Mapeia os parâmetros de requisição com base na aba de mídia ativa
   const getActionParams = (tab: string) => {
@@ -258,7 +259,8 @@ export default function Home() {
 
   // 5. Aciona o foco remoto inicial diretamente no menu
   useEffect(() => {
-    if (!isInitialLoading && isLoggedIn && !isBlocked) {
+    if (!hasSetInitialFocus.current && !isInitialLoading && isLoggedIn && !isBlocked) {
+      hasSetInitialFocus.current = true;
       setFocus('sidebar');
     }
   }, [isInitialLoading, isLoggedIn, isBlocked]);
@@ -321,6 +323,7 @@ export default function Home() {
               // Integrado com os novos parâmetros obrigatórios do Row.tsx do seu amigo
               <Row
                 key={category.id}
+                rowId={category.id}
                 title={category.name}
                 channels={category.channels}
                 rowIndex={index}

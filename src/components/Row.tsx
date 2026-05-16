@@ -15,6 +15,7 @@ interface Channel {
 }
 
 interface RowProps {
+  rowId: string;
   title: string;
   channels: Channel[];
   rowIndex: number;
@@ -25,21 +26,24 @@ interface RowProps {
 
 interface FocusableCardProps {
   channel: Channel;
-  focusKey: string;
+  cardFocusKey: string;
   isLastRow: boolean;
   onLastRowFocus?: () => void;
   onClick: (channel: Channel) => void;
 }
 
+const createFocusKeyPart = (value: string | number) =>
+  String(value).replace(/[^a-zA-Z0-9_-]/g, '-');
+
 function FocusableCard({
   channel,
-  focusKey,
+  cardFocusKey,
   isLastRow,
   onLastRowFocus,
   onClick,
 }: FocusableCardProps) {
   const { ref, focused } = useFocusable({
-    focusKey,
+    focusKey: cardFocusKey,
     onEnterPress: () => onClick(channel),
     onFocus: () => {
       if (ref.current) {
@@ -79,6 +83,7 @@ function FocusableCard({
 }
 
 export default function Row({
+  rowId,
   title,
   channels,
   rowIndex,
@@ -87,9 +92,10 @@ export default function Row({
   onChannelClick,
 }: RowProps) {
   const hasTriggeredLoad = useRef(false);
+  const rowFocusKey = `row-${createFocusKeyPart(rowId)}`;
 
   const { ref, focusKey } = useFocusable({
-    focusKey: `row-${rowIndex}`,
+    focusKey: rowFocusKey,
   });
 
   const handleLastRowFocus = () => {
@@ -110,7 +116,7 @@ export default function Row({
               <FocusableCard
                 key={`${rowIndex}-${channel.id}-${index}`}
                 channel={channel}
-                focusKey={`row-${rowIndex}-card-${index}`}
+                cardFocusKey={`${rowFocusKey}-card-${createFocusKeyPart(channel.id || index)}`}
                 isLastRow={isLastRow}
                 onLastRowFocus={handleLastRowFocus}
                 onClick={onChannelClick}

@@ -1,9 +1,23 @@
 'use client';
+import type { ElementType } from 'react';
 import { LayoutDashboard, Tv, Users, CreditCard, LogOut } from 'lucide-react';
 import styles from './Sidebar.module.css';
+import type { ResellerTab } from '../types';
 
-export default function Sidebar({ activeTab, setActiveTab, credits }: any) {
-    const menu = [
+type SidebarProps = {
+    activeTab: ResellerTab;
+    setActiveTab: (tab: ResellerTab) => void;
+    credits: number | null;
+};
+
+type MenuItem = {
+    id: ResellerTab;
+    label: string;
+    icon: ElementType;
+};
+
+export default function Sidebar({ activeTab, setActiveTab, credits }: SidebarProps) {
+    const menu: MenuItem[] = [
         { id: 'home', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'ativar', label: 'Ativar TV', icon: Tv },
         { id: 'clientes', label: 'Clientes Ativos', icon: Users },
