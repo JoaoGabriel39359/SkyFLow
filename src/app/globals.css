@@ -1,15 +1,15 @@
 :root {
-  --background: #0a0a0a;
+  --background: #05050b;
   --foreground: #ffffff;
-  --accent: #e50914; /* Netflix Red */
-  --accent-hover: #ff1f2a;
-  --card-bg: #141414;
-  --card-hover: #202020;
-  --sidebar-bg: #000000;
+  --accent: #8b5cf6;
+  --accent-hover: #a78bfa;
+  --card-bg: rgba(12, 12, 24, 0.92);
+  --card-hover: rgba(139, 92, 246, 0.16);
+  --sidebar-bg: #05050b;
   --text-muted: #a3a3a3;
-  --glass-bg: rgba(0, 0, 0, 0.7);
+  --glass-bg: rgba(10, 10, 22, 0.86);
   --glass-border: rgba(255, 255, 255, 0.1);
-  --focus-glow: 0 0 15px rgba(229, 9, 20, 0.5);
+  --focus-glow: 0 0 0 3px rgba(139, 92, 246, 0.55);
 }
 
 * {
@@ -55,8 +55,6 @@ body {
 /* Utility Classes */
 .glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
 }
 
@@ -69,7 +67,7 @@ body {
 }
 
 .animate-in {
-  animation: fadeIn 0.5s ease forwards;
+  animation: fadeIn 0.22s ease forwards;
 }
 
 @keyframes fadeIn {
@@ -80,8 +78,8 @@ body {
   height: 100vh;
   width: 100vw;
   background:
-    radial-gradient(circle at center, rgba(139, 92, 246, 0.22), transparent 34%),
-    linear-gradient(135deg, #05050c, #020208);
+    radial-gradient(circle at 50% 20%, rgba(139, 92, 246, 0.16), transparent 34%),
+    #05050b;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -90,12 +88,10 @@ body {
 
 .nuvixGlow {
   position: absolute;
-  width: 420px;
-  height: 420px;
+  width: 320px;
+  height: 320px;
   border-radius: 50%;
-  background: rgba(139, 92, 246, 0.24);
-  filter: blur(110px);
-  animation: pulseGlow 2.4s ease-in-out infinite;
+  background: rgba(139, 92, 246, 0.12);
 }
 
 .nuvixLoaderCard {
@@ -109,7 +105,7 @@ body {
   font-size: 3.6rem;
   font-weight: 900;
   letter-spacing: -0.08em;
-  text-shadow: 0 0 36px rgba(139, 92, 246, 0.65);
+  text-shadow: 0 0 16px rgba(139, 92, 246, 0.4);
 }
 
 .nuvixLoaderCard h1::first-letter {
@@ -149,17 +145,6 @@ body {
   }
 }
 
-@keyframes pulseGlow {
-  0%, 100% {
-    opacity: 0.55;
-    transform: scale(1);
-  }
-
-  50% {
-    opacity: 0.9;
-    transform: scale(1.12);
-  }
-}
 .homeIntro {
   min-height: 100vh;
   padding: 8rem 6vw;
@@ -168,8 +153,8 @@ body {
   align-items: center;
   gap: 4rem;
   background:
-    radial-gradient(circle at 70% 35%, rgba(139, 92, 246, 0.22), transparent 34%),
-    linear-gradient(135deg, #05050c, #020208);
+    radial-gradient(circle at 70% 35%, rgba(139, 92, 246, 0.14), transparent 34%),
+    #05050b;
 }
 
 .homeIntroText {
@@ -195,7 +180,7 @@ body {
   line-height: 0.95;
   letter-spacing: -0.08em;
   font-weight: 950;
-  text-shadow: 0 0 50px rgba(139, 92, 246, 0.28);
+  text-shadow: 0 0 18px rgba(139, 92, 246, 0.22);
 }
 
 .homeIntro p {
@@ -210,12 +195,9 @@ body {
   min-height: 420px;
   border-radius: 34px;
   background:
-    radial-gradient(circle at 50% 45%, rgba(139, 92, 246, 0.22), transparent 46%),
     linear-gradient(145deg, rgba(10, 10, 26, 0.98), rgba(2, 2, 8, 0.98));
   border: 1px solid rgba(139, 92, 246, 0.22);
-  box-shadow:
-    0 32px 90px rgba(0, 0, 0, 0.58),
-    0 0 70px rgba(139, 92, 246, 0.14);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
   position: relative;
   overflow: visible;
   display: flex;
@@ -242,9 +224,7 @@ body {
   background:
     linear-gradient(145deg, rgba(18, 18, 42, 0.72), rgba(4, 4, 14, 0.94));
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.55),
-    inset 0 0 60px rgba(139, 92, 246, 0.05);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
   padding: 1.25rem;
   z-index: 2;
   overflow: visible;
@@ -396,7 +376,7 @@ body {
 }
 .scrollDownHint {
   position: fixed;
-  left: 260px;
+  left: 0;
   right: 0;
   bottom: 1.4rem;
   z-index: 999;
@@ -405,7 +385,6 @@ body {
   align-items: center;
   pointer-events: none;
   opacity: 0.9;
-  animation: scrollHintPulse 1.4s ease-in-out infinite;
 }
 
 .scrollDownHint span {
@@ -420,7 +399,7 @@ body {
   line-height: 1;
   background: rgba(139, 92, 246, 0.22);
   border: 1px solid rgba(139, 92, 246, 0.45);
-  box-shadow: 0 0 28px rgba(139, 92, 246, 0.32);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
 }
 
 .scrollDownHint p {
@@ -428,6 +407,148 @@ body {
   color: rgba(255, 255, 255, 0.55);
   font-size: 0.78rem;
   font-weight: 600;
+}
+
+.contentHeader {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 2rem 4rem 0;
+  color: #fff;
+}
+
+.contentHeader span {
+  color: #d9ccff;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.contentHeader h1 {
+  margin: 0.2rem 0 0;
+  font-size: 2rem;
+  line-height: 1.1;
+  font-weight: 950;
+}
+
+.contentBackButton {
+  min-width: 180px;
+  min-height: 56px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.contentBackButton:focus-visible,
+.contentBackButtonFocused {
+  outline: none;
+  transform: scale(1.04);
+  border-color: rgba(139, 92, 246, 0.9);
+  background: rgba(139, 92, 246, 0.18);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.42);
+}
+
+.contentIconButton {
+  width: 58px;
+  height: 58px;
+  margin-left: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.contentIconButton:focus-visible,
+.contentIconButtonFocused {
+  outline: none;
+  transform: scale(1.04);
+  border-color: rgba(139, 92, 246, 0.9);
+  background: rgba(139, 92, 246, 0.18);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.42);
+}
+
+.emptyUtilityScreen {
+  min-height: 100vh;
+  padding: 7rem 4.5rem;
+  color: #fff;
+  background:
+    radial-gradient(circle at 80% 10%, rgba(91, 140, 255, 0.12), transparent 32%),
+    #05050c;
+}
+
+.emptyUtilityScreen span {
+  color: #bda7ff;
+  font-size: 0.92rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.emptyUtilityScreen h1 {
+  margin: 0.8rem 0 0;
+  font-size: 4rem;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.activationCard {
+  padding: 50px;
+  border-radius: 25px;
+  border: 1px solid #8b5cf6;
+  background: #111;
+}
+
+.activationCard h1 {
+  font-size: 3rem;
+}
+
+.activationStatus {
+  color: #8b5cf6;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.activationInfo {
+  margin: 25px 0;
+  padding: 20px;
+  border-radius: 15px;
+  text-align: left;
+  background: #000;
+}
+
+.activationInfo small {
+  color: #666;
+}
+
+.activationInfo code {
+  color: #fff;
+  font-size: 1.4rem;
+}
+
+.activationHelp {
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.emptyContentMessage {
+  padding: 4rem;
+  color: #fff;
+  text-align: center;
+}
+
+.contentLoadingMessage {
+  padding: 2rem;
+  color: #8b5cf6;
+  text-align: center;
 }
 
 .logoutModalOverlay {
@@ -439,9 +560,7 @@ body {
   justify-content: center;
   padding: 2rem;
   background:
-    radial-gradient(circle at 50% 45%, rgba(139, 92, 246, 0.18), transparent 34%),
     rgba(0, 0, 0, 0.78);
-  backdrop-filter: blur(10px);
 }
 
 .logoutModal {
@@ -450,9 +569,7 @@ body {
   border: 1px solid rgba(139, 92, 246, 0.38);
   background:
     linear-gradient(145deg, rgba(18, 18, 42, 0.98), rgba(5, 5, 14, 0.98));
-  box-shadow:
-    0 34px 90px rgba(0, 0, 0, 0.72),
-    0 0 50px rgba(139, 92, 246, 0.18);
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.62);
   padding: 2rem;
   text-align: center;
 }
@@ -469,7 +586,7 @@ body {
   justify-content: center;
   font-size: 1.65rem;
   font-weight: 900;
-  box-shadow: 0 0 32px rgba(139, 92, 246, 0.45);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.24);
 }
 
 .logoutModal h2 {
@@ -521,9 +638,7 @@ body {
 .modalButtonFocused {
   outline: none;
   transform: scale(1.04);
-  box-shadow:
-    0 0 0 3px rgba(139, 92, 246, 0.52),
-    0 0 34px rgba(139, 92, 246, 0.28);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.52);
 }
 
 .modalButtonDanger:hover,
@@ -536,17 +651,5 @@ body {
 @media (max-width: 560px) {
   .logoutModalActions {
     grid-template-columns: 1fr;
-  }
-}
-
-@keyframes scrollHintPulse {
-  0%, 100% {
-    transform: translateY(0);
-    opacity: 0.65;
-  }
-
-  50% {
-    transform: translateY(6px);
-    opacity: 1;
   }
 }

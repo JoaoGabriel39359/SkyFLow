@@ -1,0 +1,158 @@
+.screen {
+  min-height: 100vh;
+  padding: 3rem 5vw 5rem;
+  background:
+    radial-gradient(circle at 78% 18%, rgba(91, 140, 255, 0.13), transparent 32%),
+    #05050b;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 4.2rem;
+}
+
+.header {
+  display: block;
+  margin-bottom: 3.2rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  color: #fff;
+  font-size: 1.45rem;
+  font-weight: 900;
+}
+
+.brandIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #8b5cf6, #5b8cff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.24);
+}
+
+.iconAction {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+}
+
+.eyebrow {
+  display: inline-flex;
+  margin-bottom: 0.9rem;
+  padding: 0.48rem 0.75rem;
+  border-radius: 999px;
+  color: #d9ccff;
+  background: rgba(139, 92, 246, 0.14);
+  border: 1px solid rgba(139, 92, 246, 0.24);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.header h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 3.2rem;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.header p {
+  max-width: 580px;
+  margin-top: 1rem;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 1.1rem;
+  line-height: 1.45;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 1.4rem;
+}
+
+.card {
+  min-height: 300px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(10, 10, 22, 0.92);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 0.9rem;
+  padding: 1.6rem;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+}
+
+.iconWrap {
+  width: 96px;
+  height: 96px;
+  border-radius: 24px;
+  background: rgba(139, 92, 246, 0.16);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  color: #d9ccff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: auto;
+}
+
+.cardTitle {
+  font-size: 1.85rem;
+  font-weight: 900;
+}
+
+.cardDescription {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.card.focused,
+.card:focus-visible {
+  outline: none;
+  transform: translateY(-3px) scale(1.01);
+  border-color: rgba(139, 92, 246, 0.92);
+  background: rgba(28, 22, 55, 0.96);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.42);
+}
+
+.iconAction.focused,
+.iconAction:focus-visible {
+  outline: none;
+  transform: scale(1.03);
+  border-color: rgba(139, 92, 246, 0.92);
+  background: rgba(139, 92, 246, 0.18);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.42);
+}
+
+@media (max-width: 980px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,168 @@
+.screen {
+  min-height: 100vh;
+  padding: 4.5rem 5vw;
+  background:
+    radial-gradient(circle at 80% 18%, rgba(91, 140, 255, 0.12), transparent 30%),
+    #05050b;
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1.6rem;
+  margin-bottom: 2.2rem;
+}
+
+.backButton {
+  min-width: 142px;
+  min-height: 58px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  font-size: 1.05rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+}
+
+.iconAction {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+}
+
+.eyebrow {
+  display: inline-flex;
+  margin-bottom: 0.75rem;
+  padding: 0.45rem 0.72rem;
+  border-radius: 999px;
+  color: #d9ccff;
+  background: rgba(139, 92, 246, 0.14);
+  border: 1px solid rgba(139, 92, 246, 0.24);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.topbar h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 2.65rem;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.topbar p {
+  margin-top: 0.75rem;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 1rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  min-height: 108px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(10, 10, 22, 0.92);
+  color: #fff;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.15rem;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+}
+
+.folderIcon {
+  width: 62px;
+  height: 62px;
+  border-radius: 18px;
+  background: rgba(139, 92, 246, 0.16);
+  border: 1px solid rgba(139, 92, 246, 0.26);
+  color: #d9ccff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.categoryName {
+  color: #fff;
+  font-size: 1.18rem;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.badge {
+  padding: 0.35rem 0.58rem;
+  border-radius: 999px;
+  color: #c7d2fe;
+  background: rgba(91, 140, 255, 0.14);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.card.focused,
+.card:focus-visible,
+.backButton.focused,
+.backButton:focus-visible,
+.iconAction.focused,
+.iconAction:focus-visible {
+  outline: none;
+  transform: translateY(-2px) scale(1.01);
+  border-color: rgba(139, 92, 246, 0.92);
+  background: rgba(139, 92, 246, 0.18);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.42);
+}
+
+.loading {
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.1rem;
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .backButton {
+    grid-column: 1 / 2;
+  }
+
+  .topbar > div {
+    grid-column: 1 / -1;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
