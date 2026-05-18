@@ -16,9 +16,13 @@ export default function AtivarForm({ onSuccess, setCredits }: AtivarFormProps) {
         e.preventDefault();
         setIsLoading(true);
         try {
+            const token = localStorage.getItem('token');
             const res = await fetch('http://localhost:8000/api/v1/devices/activate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(formData),
             });
             const data = await res.json();

@@ -1,12 +1,13 @@
 'use client';
-import { LayoutDashboard, Tv, Users, CreditCard, LogOut } from 'lucide-react';
+import { LayoutDashboard, Tv, Users, CreditCard, LogOut, Network } from 'lucide-react';
 import styles from './Sidebar.module.css';
 
-export default function Sidebar({ activeTab, setActiveTab, credits }: any) {
+export default function Sidebar({ activeTab, setActiveTab, credits, onLogout }: any) {
     const menu = [
         { id: 'home', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'ativar', label: 'Ativar TV', icon: Tv },
         { id: 'clientes', label: 'Clientes Ativos', icon: Users },
+        { id: 'subrevendedores', label: 'Sub-Revendedores', icon: Network },
         { id: 'pagamento', label: 'Comprar Créditos', icon: CreditCard },
     ];
 
@@ -34,7 +35,7 @@ export default function Sidebar({ activeTab, setActiveTab, credits }: any) {
                     <p className={styles.balanceLabel}>Saldo em Conta</p>
                     <p className={styles.balanceValue}>{credits} <span className={styles.balanceCurrency}>CR</span></p>
                 </div>
-                <button className={styles.logoutBtn}>
+                <button className={styles.logoutBtn} onClick={onLogout}>
                     <LogOut size={16} /> Sair
                 </button>
             </div>
