@@ -31,7 +31,7 @@ export default function PainelRevendedor() {
         try {
             const response = await fetch(`http://localhost:8000/api/v1/devices/list/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            }); 
+            });
             if (response.ok) {
                 const data = await response.json() as ResellerDevice[];
                 setDevices(data);

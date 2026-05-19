@@ -15,7 +15,6 @@ export default function AtivarForm({ onSuccess, setCredits }: AtivarFormProps) {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        try {
             const token = localStorage.getItem('token');
             const res = await fetch('http://localhost:8000/api/v1/devices/activate', {
                 method: 'POST',

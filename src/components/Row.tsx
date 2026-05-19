@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
+import Image from 'next/image';
 import {
   useFocusable,
   FocusContext,
@@ -68,11 +69,13 @@ function FocusableCard({
       className={`${styles.card} ${focused ? styles.cardFocused : ''}`}
       onClick={() => onClick(channel)}
     >
-      <img
+      <Image
         src={channel.logo}
         alt={channel.name}
         className={styles.thumbnail}
-        loading="lazy"
+        fill
+        sizes="280px"
+        unoptimized
       />
 
       <div className={styles.cardOverlay}>
