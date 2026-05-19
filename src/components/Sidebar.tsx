@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   Home,
   Tv,
@@ -10,11 +10,11 @@ import {
   Search,
   Star,
   ListVideo,
+  LogOut,
 } from 'lucide-react';
 import {
   useFocusable,
   FocusContext,
-  setFocus,
 } from '@noriginmedia/norigin-spatial-navigation';
 import styles from './Sidebar.module.css';
 
@@ -22,32 +22,36 @@ type MenuItem = {
   icon: React.ElementType;
   label: string;
   id: string;
+  focusKey: string;
   children?: MenuItem[];
 };
 
 type SidebarProps = {
   activeTab: string;
   onTabChange: (tabId: string) => void;
+  onLogout: () => void;
 };
 
 type FocusableMenuItemProps = {
   item: MenuItem;
   activeTab: string;
   onTabChange: (tabId: string) => void;
+  onLogout?: () => void;
   isChild?: boolean;
 };
 
 const menuItems: MenuItem[] = [
-  { icon: Search, label: 'Busca', id: 'search' },
-  { icon: Home, label: 'Início', id: 'home' },
+  { icon: Search, label: 'Busca', id: 'search', focusKey: 'sidebar-search' },
+  { icon: Home, label: 'Início', id: 'home', focusKey: 'sidebar-home' },
 
   {
     icon: Tv,
     label: 'TV ao Vivo',
     id: 'live',
+    focusKey: 'sidebar-live',
     children: [
-      { icon: ListVideo, label: 'Canais', id: 'live' },
-      { icon: Star, label: 'Favoritos', id: 'live-favorites' },
+      { icon: ListVideo, label: 'Canais', id: 'live', focusKey: 'sidebar-live-catalog' },
+      { icon: Star, label: 'Favoritos', id: 'live-favorites', focusKey: 'sidebar-live-favorites' },
     ],
   },
 
@@ -55,9 +59,10 @@ const menuItems: MenuItem[] = [
     icon: Film,
     label: 'Filmes',
     id: 'movies',
+    focusKey: 'sidebar-movies',
     children: [
-      { icon: ListVideo, label: 'Catálogo', id: 'movies' },
-      { icon: Star, label: 'Favoritos', id: 'movies-favorites' },
+      { icon: ListVideo, label: 'Catálogo', id: 'movies', focusKey: 'sidebar-movies-catalog' },
+      { icon: Star, label: 'Favoritos', id: 'movies-favorites', focusKey: 'sidebar-movies-favorites' },
     ],
   },
 
@@ -65,28 +70,40 @@ const menuItems: MenuItem[] = [
     icon: PlayCircle,
     label: 'Séries',
     id: 'series',
+    focusKey: 'sidebar-series',
     children: [
-      { icon: ListVideo, label: 'Catálogo', id: 'series' },
-      { icon: Star, label: 'Favoritos', id: 'series-favorites' },
+      { icon: ListVideo, label: 'Catálogo', id: 'series', focusKey: 'sidebar-series-catalog' },
+      { icon: Star, label: 'Favoritos', id: 'series-favorites', focusKey: 'sidebar-series-favorites' },
     ],
   },
 
-  { icon: Settings, label: 'Ajustes', id: 'settings' },
+  { icon: Settings, label: 'Ajustes', id: 'settings', focusKey: 'sidebar-settings' },
+  { icon: LogOut, label: 'Sair', id: 'logout', focusKey: 'sidebar-logout' },
 ];
 
 function FocusableMenuItem({
   item,
   activeTab,
   onTabChange,
+  onLogout,
   isChild = false,
 }: FocusableMenuItemProps) {
   const isActive =
-    activeTab === item.id ||
+    (item.id !== 'logout' && activeTab === item.id) ||
     item.children?.some((child: MenuItem) => child.id === activeTab);
 
+  const handlePress = () => {
+    if (item.id === 'logout') {
+      onLogout?.();
+      return;
+    }
+
+    onTabChange(item.id);
+  };
+
   const { ref, focused } = useFocusable({
-    focusKey: `sidebar-${item.id}`,
-    onEnterPress: () => onTabChange(item.id),
+    focusKey: item.focusKey,
+    onEnterPress: handlePress,
   });
 
   return (
@@ -96,10 +113,11 @@ function FocusableMenuItem({
       className={`
         ${styles.navItem}
         ${isChild ? styles.subItem : ''}
+        ${item.id === 'logout' ? styles.logoutItem : ''}
         ${isActive ? styles.active : ''}
         ${focused ? styles.focused : ''}
       `}
-      onClick={() => onTabChange(item.id)}
+      onClick={handlePress}
       title={item.label}
     >
       <item.icon size={isChild ? 18 : 24} />
@@ -108,21 +126,11 @@ function FocusableMenuItem({
   );
 }
 
-export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
+export default function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
   const { ref, focusKey } = useFocusable({
     focusKey: 'sidebar',
     trackChildren: true,
   });
-
-  useEffect(() => {
-    const initialFocusKey = activeTab ? `sidebar-${activeTab}` : 'sidebar-home';
-
-    const timeout = setTimeout(() => {
-      setFocus(initialFocusKey);
-    }, 100);
-
-    return () => clearTimeout(timeout);
-  }, [activeTab]);
 
   return (
     <FocusContext.Provider value={focusKey}>
@@ -137,21 +145,23 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 
         <nav className={styles.nav}>
           {menuItems.map((item) => (
-            <div key={item.id} className={styles.navGroup}>
+            <div key={item.focusKey} className={styles.navGroup}>
               <FocusableMenuItem
                 item={item}
                 activeTab={activeTab}
                 onTabChange={onTabChange}
+                onLogout={onLogout}
               />
 
               {item.children && (
                 <div className={styles.subMenu}>
                   {item.children.map((child) => (
                     <FocusableMenuItem
-                      key={child.id}
+                      key={child.focusKey}
                       item={child}
                       activeTab={activeTab}
                       onTabChange={onTabChange}
+                      onLogout={onLogout}
                       isChild
                     />
                   ))}

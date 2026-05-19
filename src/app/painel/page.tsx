@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import styles from './page.module.css';
 import Sidebar from './components/SidebarR';
 import Dashboard from './components/DashboardR';
@@ -7,11 +7,12 @@ import AtivarForm from './components/AtivarFormR';
 import ClientesTable from './components/ClientesTableR';
 import Pagamento from './components/PagamentoR';
 import SubRevendedores from './components/SubRevendedoresR';
+import type { ResellerDevice, ResellerTab } from './types';
 
 export default function PainelRevendedor() {
-    const [activeTab, setActiveTab] = useState('home');
+    const [activeTab, setActiveTab] = useState<ResellerTab>('home');
     const [resellerCredits, setResellerCredits] = useState<number | null>(null);
-    const [devices, setDevices] = useState([]);
+    const [devices, setDevices] = useState<ResellerDevice[]>([]);
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -21,19 +22,18 @@ export default function PainelRevendedor() {
         window.location.href = '/painel/login';
     };
 
-    const refreshData = async () => {
+    const refreshData = useCallback(async () => {
         const token = localStorage.getItem('token');
         if (!token) {
             window.location.href = '/painel/login';
             return;
         }
-
         try {
             const response = await fetch(`http://localhost:8000/api/v1/devices/list/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             }); 
             if (response.ok) {
-                const data = await response.json();
+                const data = await response.json() as ResellerDevice[];
                 setDevices(data);
             }
             
@@ -47,9 +47,15 @@ export default function PainelRevendedor() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    useEffect(() => { refreshData(); }, []);
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            refreshData();
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [refreshData]);
 
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-black text-white">Carregando painel...</div>;
 

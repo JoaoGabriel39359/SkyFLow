@@ -8,6 +8,15 @@
   z-index: 1000;
   display: flex;
   flex-direction: column;
+  outline: none;
+}
+
+.controlsHidden {
+  cursor: none;
+}
+
+.controlsVisible {
+  cursor: default;
 }
 
 .header {
@@ -16,30 +25,123 @@
   left: 0;
   right: 0;
   padding: 2rem;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.86), transparent);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1.4rem;
   z-index: 10;
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  opacity: 1;
+  transition: opacity 0.16s ease;
 }
 
-.container:hover .header {
+.controlsHidden .header,
+.controlsHidden .channelBtn,
+.controlsHidden .bottomControls,
+.controlsHidden .controlsHint {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.controlsVisible .header,
+.controlsVisible .channelBtn,
+.controlsVisible .bottomControls,
+.controlsVisible .controlsHint {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .title {
+  flex: 1;
   font-size: 2rem;
-  font-weight: bold;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.closeBtn {
-  background: none;
-  border: none;
+.backBtn,
+.iconBtn,
+.channelBtn,
+.controlBtn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.52);
   color: white;
   cursor: pointer;
-  padding: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.14s ease, background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.backBtn {
+  min-width: 142px;
+  min-height: 56px;
+  gap: 0.65rem;
+  padding: 0 1.2rem;
+  border-radius: 8px;
+  font-size: 1.05rem;
+  font-weight: 850;
+}
+
+.iconBtn {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+}
+
+.channelBtn {
+  position: absolute;
+  top: 50%;
+  z-index: 11;
+  width: 76px;
+  height: 96px;
+  border-radius: 8px;
+  transform: translateY(-50%);
+  opacity: 1;
+  transition: opacity 0.16s ease, transform 0.14s ease, background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.previousBtn {
+  left: 2rem;
+}
+
+.nextBtn {
+  right: 2rem;
+}
+
+.disabled {
+  opacity: 0.24;
+  cursor: default;
+}
+
+.focused,
+.backBtn:focus-visible,
+.iconBtn:focus-visible,
+.channelBtn:focus-visible,
+.controlBtn:focus-visible {
+  outline: none;
+  background: rgba(139, 92, 246, 0.24);
+  border-color: rgba(139, 92, 246, 0.88);
+  box-shadow:
+    0 0 0 3px rgba(139, 92, 246, 0.48);
+}
+
+.backBtn.focused,
+.backBtn:focus-visible,
+.iconBtn.focused,
+.iconBtn:focus-visible {
+  transform: scale(1.05);
+}
+
+.channelBtn.focused,
+.channelBtn:focus-visible {
+  transform: translateY(-50%) scale(1.08);
+}
+
+.controlBtn.focused,
+.controlBtn:focus-visible {
+  transform: scale(1.05);
 }
 
 .video {
@@ -48,21 +150,63 @@
   object-fit: contain;
 }
 
+.bottomControls {
+  position: absolute;
+  left: 50%;
+  bottom: 3.7rem;
+  z-index: 12;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 1;
+  transition: opacity 0.16s ease;
+}
+
+.controlBtn {
+  min-width: 118px;
+  min-height: 52px;
+  gap: 0.5rem;
+  padding: 0 0.95rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .controlsHint {
   position: absolute;
-  bottom: 2rem;
+  bottom: 1rem;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0,0,0,0.6);
-  padding: 0.5rem 1.5rem;
-  border-radius: 20px;
+  background: rgba(0,0,0,0.68);
+  padding: 0.65rem 1.2rem;
+  border-radius: 8px;
   font-size: 0.9rem;
   color: #ccc;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  opacity: 1;
+  transition: opacity 0.16s ease;
 }
 
-.container:hover .controlsHint {
-  opacity: 1;
+.controlsHint span {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .bottomControls {
+    max-width: calc(100vw - 2rem);
+    overflow-x: auto;
+  }
+
+  .controlBtn {
+    min-width: 104px;
+  }
 }
