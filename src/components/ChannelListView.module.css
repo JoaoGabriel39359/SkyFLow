@@ -54,6 +54,46 @@
   width: 58px;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.72rem;
+}
+
+.searchBox {
+  width: min(390px, 28vw);
+  min-height: 58px;
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  background: rgba(10, 10, 22, 0.94);
+  color: rgba(255, 255, 255, 0.72);
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+  padding: 0 0.95rem;
+}
+
+.searchBox input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 0.98rem;
+  font-weight: 750;
+}
+
+.searchBox input::placeholder {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.searchBox:focus-within {
+  border-color: rgba(139, 92, 246, 0.92);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.34);
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(360px, 42%) minmax(420px, 1fr);
@@ -153,6 +193,17 @@
   font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.favoriteStar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: 0.42rem;
+  color: #facc15;
+  font-size: 0.92em;
+  line-height: 1;
+  text-shadow: 0 0 10px rgba(250, 204, 21, 0.26);
+  vertical-align: -0.12em;
 }
 
 .channelMeta {
@@ -303,11 +354,26 @@
   background: rgba(255, 255, 255, 0.055);
   color: rgba(255, 255, 255, 0.66);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 1rem;
   font-size: 0.92rem;
   font-weight: 750;
+}
+
+.favoriteFeedback {
+  min-height: 44px;
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(234, 179, 8, 0.28);
+  background: rgba(234, 179, 8, 0.1);
+  color: #fde68a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.94rem;
+  font-weight: 820;
 }
 
 .loading {
@@ -345,6 +411,25 @@
 }
 
 @media (max-width: 1050px) {
+  .header {
+    grid-template-columns: 1fr auto;
+  }
+
+  .heading {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .headerActions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    order: 4;
+  }
+
+  .searchBox {
+    width: min(100%, 390px);
+  }
+
   .layout {
     grid-template-columns: 1fr;
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { Play, Info } from 'lucide-react';
 import styles from './Hero.module.css';
 
@@ -16,7 +17,15 @@ export default function Hero({ channel }: HeroProps) {
   return (
     <section className={styles.hero}>
       <div className={styles.overlay}></div>
-      <img src={channel.logo} alt={channel.name} className={styles.background} />
+      <Image
+        src={channel.logo}
+        alt={channel.name}
+        className={styles.background}
+        fill
+        priority
+        sizes="100vw"
+        unoptimized
+      />
       
       <div className={styles.content}>
         <span className={styles.category}>{channel.category}</span>

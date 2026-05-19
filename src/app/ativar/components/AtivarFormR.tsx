@@ -16,7 +16,7 @@ export default function AtivarForm({ onSuccess, setCredits }: AtivarFormProps) {
         e.preventDefault();
         setIsLoading(true);
         try {
-            const res = await fetch('http://localhost:8000/api/v1/devices/activate', {
+            const res = await fetch('http://127.0.0.1:8000/api/v1/devices/activate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData),

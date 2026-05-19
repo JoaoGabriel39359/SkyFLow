@@ -12,7 +12,7 @@ export async function loginXtream(baseUrl: string, user: string, pass: string) {
       };
     }
     return { success: false, message: 'Falha na autenticação' };
-  } catch (error) {
+  } catch {
     return { success: false, message: 'Erro de conexão com o servidor proxy' };
   }
 }

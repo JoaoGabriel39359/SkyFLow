@@ -11,6 +11,7 @@ import ChannelListView, {
 } from '@/components/ChannelListView';
 import { getCategories, getStreams, buildStreamUrl } from '@/lib/iptvEngine';
 import { getDeviceId } from '@/lib/device';
+import { getFavoriteIds, getFavorites, toggleFavorite } from '@/lib/favorites';
 import { init, setFocus, useFocusable, FocusContext } from '@noriginmedia/norigin-spatial-navigation';
 
 init({
@@ -25,6 +26,7 @@ type ActionParams = {
 };
 
 const FALLBACK_LOGO = 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=800&auto=format&fit=crop&q=60';
+const CONTENT_BATCH_SIZE = 60;
 
 const mediaTitles: Record<MainMenuSection, { title: string; subtitle: string }> = {
   live: {
@@ -57,6 +59,12 @@ const getCurrentMediaKey = (tab: string): MainMenuSection => {
   if (tab.includes('movies')) return 'movies';
   if (tab.includes('series')) return 'series';
   return 'live';
+};
+
+const emptyFavoriteIds: Record<MainMenuSection, string[]> = {
+  live: [],
+  movies: [],
+  series: [],
 };
 
 type LogoutConfirmModalProps = {
@@ -162,15 +170,19 @@ export default function Home() {
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [loadedCategories, setLoadedCategories] = useState<any[]>([]);
+  const [allCategoryChannels, setAllCategoryChannels] = useState<ChannelListViewChannel[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<MediaCategory | null>(null);
+  const [favoriteIdsByType, setFavoriteIdsByType] = useState<Record<MainMenuSection, string[]>>(emptyFavoriteIds);
+  const [favoriteFeedback, setFavoriteFeedback] = useState('');
   const hasSetInitialFocus = useRef(false);
+  const categoryContentCache = useRef(new Map<string, ChannelListViewChannel[]>());
 
   const checkDeviceSecurity = useCallback(async () => {
     const deviceId = getDeviceId();
     setIsInitialLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/devices/check-device', {
+      const response = await fetch('http://127.0.0.1:8000/api/v1/devices/check-device', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mac: deviceId }),
@@ -209,6 +221,18 @@ export default function Home() {
   }, [checkDeviceSecurity]);
 
   useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setFavoriteIdsByType({
+        live: getFavoriteIds('live'),
+        movies: getFavoriteIds('movies'),
+        series: getFavoriteIds('series'),
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
     if (!isLoggedIn || !credentials) return;
 
     const isUtilityTab = activeTab === 'home' || activeTab === 'search' || activeTab === 'settings';
@@ -216,6 +240,7 @@ export default function Home() {
       const timeout = window.setTimeout(() => {
         setAllCategories([]);
         setLoadedCategories([]);
+        setAllCategoryChannels([]);
         setSelectedCategory(null);
         setPreviewChannel(null);
         setPreparedPreviewChannelId(null);
@@ -229,6 +254,7 @@ export default function Home() {
     const loadCategories = async () => {
       setAllCategories([]);
       setLoadedCategories([]);
+      setAllCategoryChannels([]);
       setSelectedCategory(null);
       setPreviewChannel(null);
       setPreparedPreviewChannelId(null);
@@ -307,11 +333,13 @@ export default function Home() {
     setActiveTab('home');
     setAllCategories([]);
     setLoadedCategories([]);
+    setAllCategoryChannels([]);
     setSelectedCategory(null);
     setPreviewChannel(null);
     setPreparedPreviewChannelId(null);
     setIsLoadingCategories(false);
     setCanScrollDown(false);
+    categoryContentCache.current.clear();
     checkDeviceSecurity();
   }, [checkDeviceSecurity]);
 
@@ -327,6 +355,7 @@ export default function Home() {
     setActiveTab('home');
     setAllCategories([]);
     setLoadedCategories([]);
+    setAllCategoryChannels([]);
     setSelectedCategory(null);
     setPreviewChannel(null);
     setPreparedPreviewChannelId(null);
@@ -335,6 +364,7 @@ export default function Home() {
 
   const handleBackToCategories = useCallback(() => {
     setLoadedCategories([]);
+    setAllCategoryChannels([]);
     setSelectedCategory(null);
     setPreviewChannel(null);
     setPreparedPreviewChannelId(null);
@@ -349,25 +379,64 @@ export default function Home() {
       name: category.category_name || 'Sem nome',
     }));
 
-    return [{ id: `${currentMediaKey}-all`, name: 'Todos', isAll: true }, ...mappedCategories];
+    return [
+      { id: `${currentMediaKey}-favorites`, name: 'Favoritos', isFavorites: true },
+      { id: `${currentMediaKey}-all`, name: 'Todos', isAll: true },
+      ...mappedCategories,
+    ];
   }, [allCategories, currentMediaKey]);
 
   const loadCategoryStreams = useCallback(async (category: MediaCategory) => {
     if (!credentials) return;
 
     const params = getActionParams(activeTab);
+    const categoryCacheKey = `${params.type}:${category.id}`;
     let firstChannelFocusKey = 'content-back';
     setSelectedCategory(category);
     setLoadedCategories([]);
+    setAllCategoryChannels([]);
     setPreviewChannel(null);
     setPreparedPreviewChannelId(null);
     setIsLoadingMore(true);
+    setFavoriteFeedback('');
 
     try {
+      if (category.isFavorites) {
+        const channels: ChannelListViewChannel[] = getFavorites(currentMediaKey).map((favorite) => ({
+          id: favorite.id,
+          name: favorite.name,
+          logo: favorite.logo || FALLBACK_LOGO,
+          url: favorite.url,
+        }));
+        const firstChannel = channels[0] ?? null;
+
+        firstChannelFocusKey = firstChannel ? getChannelFocusKey(firstChannel.id) : 'content-back';
+        setPreviewChannel(firstChannel);
+        setAllCategoryChannels(channels);
+        setLoadedCategories([{ id: category.id, name: category.name, channels }]);
+        return;
+      }
+
+      const cachedChannels = categoryContentCache.current.get(categoryCacheKey);
+
+      if (cachedChannels) {
+        const firstChannel = cachedChannels[0] ?? null;
+
+        firstChannelFocusKey = firstChannel ? getChannelFocusKey(firstChannel.id) : 'content-back';
+        setPreviewChannel(firstChannel);
+        setAllCategoryChannels(cachedChannels);
+        setLoadedCategories([{
+          id: category.id,
+          name: category.name,
+          channels: cachedChannels.slice(0, CONTENT_BATCH_SIZE),
+        }]);
+        return;
+      }
+
       const categoryId = category.isAll ? undefined : category.id;
       const streams = await getStreams(credentials.url, credentials.user, credentials.pass, params.stream, categoryId);
       const channels: ChannelListViewChannel[] = Array.isArray(streams)
-        ? streams.slice(0, 60).map((stream: any) => {
+        ? streams.map((stream: any) => {
           const streamId = stream.stream_id || stream.series_id;
           const name = stream.name || stream.title || 'Sem Nome';
           const logo = stream.stream_icon || stream.cover || FALLBACK_LOGO;
@@ -384,26 +453,48 @@ export default function Home() {
 
       const firstChannel = channels[0] ?? null;
       firstChannelFocusKey = firstChannel ? getChannelFocusKey(firstChannel.id) : 'content-back';
+      categoryContentCache.current.set(categoryCacheKey, channels);
       setPreviewChannel(firstChannel);
-      setLoadedCategories([{ id: category.id, name: category.name, channels }]);
+      setAllCategoryChannels(channels);
+      setLoadedCategories([{ id: category.id, name: category.name, channels: channels.slice(0, CONTENT_BATCH_SIZE) }]);
     } catch (error) {
       console.error('Erro ao carregar conteudo da categoria:', error);
+      setAllCategoryChannels([]);
       setLoadedCategories([{ id: category.id, name: category.name, channels: [] }]);
       setPreviewChannel(null);
     } finally {
       setIsLoadingMore(false);
       window.setTimeout(() => setFocus(firstChannelFocusKey), 0);
     }
-  }, [activeTab, credentials]);
+  }, [activeTab, credentials, currentMediaKey]);
+
+  const currentChannels: ChannelListViewChannel[] = useMemo(
+    () => loadedCategories[0]?.channels ?? [],
+    [loadedCategories]
+  );
+  const searchSourceChannels = allCategoryChannels.length > 0 ? allCategoryChannels : currentChannels;
+  const currentFavoriteIds = favoriteIdsByType[currentMediaKey] ?? [];
 
   const playableChannels = useMemo(
-    () => loadedCategories.flatMap((category) => category.channels),
-    [loadedCategories]
+    () => allCategoryChannels.length > 0 ? allCategoryChannels : loadedCategories.flatMap((category) => category.channels),
+    [allCategoryChannels, loadedCategories]
   );
 
   const selectedChannelIndex = selectedChannel
     ? playableChannels.findIndex((channel) => channel.url === selectedChannel.url)
     : -1;
+
+  const handleLoadMoreContent = useCallback(() => {
+    if (!selectedCategory || selectedCategory.isFavorites) return;
+    if (currentChannels.length >= allCategoryChannels.length) return;
+
+    const nextChannels = allCategoryChannels.slice(0, currentChannels.length + CONTENT_BATCH_SIZE);
+    setLoadedCategories((categories) =>
+      categories.map((category, index) =>
+        index === 0 ? { ...category, channels: nextChannels } : category
+      )
+    );
+  }, [allCategoryChannels, currentChannels.length, selectedCategory]);
 
   const handleClosePlayer = useCallback(() => {
     setSelectedChannel(null);
@@ -447,12 +538,52 @@ export default function Home() {
     setSelectedChannel(channel);
   }, [preparedPreviewChannelId, previewChannel]);
 
+  const handleFavoriteToggle = useCallback((channel: ChannelListViewChannel) => {
+    const result = toggleFavorite(currentMediaKey, channel);
+    const nextFavoriteIds = result.favorites.map((favorite) => favorite.id);
+
+    setFavoriteIdsByType((previousIds) => ({
+      ...previousIds,
+      [currentMediaKey]: nextFavoriteIds,
+    }));
+    setFavoriteFeedback(result.isFavorite ? 'Adicionado aos favoritos' : 'Removido dos favoritos');
+
+    if (selectedCategory?.isFavorites && !result.isFavorite) {
+      const channelIndex = currentChannels.findIndex((currentChannel) => currentChannel.id === channel.id);
+      const remainingChannels = currentChannels.filter((currentChannel) => currentChannel.id !== channel.id);
+      const nextChannel = remainingChannels[Math.min(Math.max(channelIndex, 0), remainingChannels.length - 1)] ?? null;
+
+      setLoadedCategories((categories) =>
+        categories.map((category, index) =>
+          index === 0 ? { ...category, channels: remainingChannels } : category
+        )
+      );
+      setPreviewChannel(nextChannel);
+      setAllCategoryChannels(remainingChannels);
+      setPreparedPreviewChannelId(null);
+
+      window.setTimeout(() => {
+        setFocus(nextChannel ? getChannelFocusKey(nextChannel.id) : 'content-back');
+      }, 0);
+    }
+  }, [currentChannels, currentMediaKey, selectedCategory]);
+
   const handlePreviewPress = useCallback(() => {
     if (!previewChannel) return;
 
     setPreparedPreviewChannelId(previewChannel.id);
     setSelectedChannel(previewChannel);
   }, [previewChannel]);
+
+  useEffect(() => {
+    if (!favoriteFeedback) return;
+
+    const timeout = window.setTimeout(() => {
+      setFavoriteFeedback('');
+    }, 1800);
+
+    return () => window.clearTimeout(timeout);
+  }, [favoriteFeedback]);
 
   if (isInitialLoading) {
     return (
@@ -485,8 +616,6 @@ export default function Home() {
     );
   }
 
-  const currentChannels: ChannelListViewChannel[] = loadedCategories[0]?.channels ?? [];
-
   return (
     <main
       style={{
@@ -512,13 +641,23 @@ export default function Home() {
           mediaTitle={mediaTitles[currentMediaKey].title}
           categoryName={selectedCategory.name}
           channels={currentChannels}
+          searchChannels={searchSourceChannels}
           selectedChannel={previewChannel}
           preparedChannelId={preparedPreviewChannelId}
           isLoading={isLoadingMore}
+          favoriteIds={currentFavoriteIds}
+          favoriteFeedback={favoriteFeedback}
+          emptyMessage={
+            selectedCategory.isFavorites
+              ? 'Nenhum favorito ainda. Segure OK em um conteudo para adicionar aos favoritos.'
+              : undefined
+          }
           onBack={handleBackToCategories}
           onLogout={handleOpenLogoutConfirm}
           onChannelFocus={handleChannelFocus}
           onChannelPress={handleChannelPress}
+          onFavoriteToggle={handleFavoriteToggle}
+          onEndReached={handleLoadMoreContent}
           onPreviewPress={handlePreviewPress}
         />
       )}

@@ -1,18 +1,20 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { ArrowLeft, Folder, LogOut } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Folder, LogOut, Search, Star } from 'lucide-react';
 import {
   FocusContext,
   setFocus,
   useFocusable,
 } from '@noriginmedia/norigin-spatial-navigation';
+import { createSearchMatcher, hasSearchQuery } from '@/lib/search';
 import styles from './CategoryGrid.module.css';
 
 export type MediaCategory = {
   id: string;
   name: string;
   isAll?: boolean;
+  isFavorites?: boolean;
 };
 
 type CategoryGridProps = {
@@ -67,8 +69,29 @@ function LogoutButton({ onLogout }: { onLogout: () => void }) {
   );
 }
 
+function SearchButton({ onOpen }: { onOpen: () => void }) {
+  const { ref, focused } = useFocusable({
+    focusKey: 'category-grid-search',
+    onEnterPress: onOpen,
+  });
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={`${styles.iconAction} ${focused ? styles.focused : ''}`}
+      onClick={onOpen}
+      aria-label="Buscar"
+      title="Buscar"
+    >
+      <Search size={28} />
+    </button>
+  );
+}
+
 function CategoryCard({ category, onSelect }: { category: MediaCategory; onSelect: (category: MediaCategory) => void }) {
   const focusKey = `category-card-${createFocusKeyPart(category.id)}`;
+  const Icon = category.isFavorites ? Star : Folder;
   const { ref, focused } = useFocusable({
     focusKey,
     onEnterPress: () => onSelect(category),
@@ -81,11 +104,12 @@ function CategoryCard({ category, onSelect }: { category: MediaCategory; onSelec
       className={`${styles.card} ${focused ? styles.focused : ''}`}
       onClick={() => onSelect(category)}
     >
-      <span className={styles.folderIcon}>
-        <Folder size={34} />
+      <span className={`${styles.folderIcon} ${category.isFavorites ? styles.favoriteIcon : ''}`}>
+        <Icon size={34} fill={category.isFavorites ? 'currentColor' : 'none'} />
       </span>
       <span className={styles.categoryName}>{category.name}</span>
       {category.isAll && <span className={styles.badge}>Tudo</span>}
+      {category.isFavorites && <span className={styles.favoriteBadge}>Favoritos</span>}
     </button>
   );
 }
@@ -99,18 +123,49 @@ export default function CategoryGrid({
   onLogout,
   onSelect,
 }: CategoryGridProps) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { ref, focusKey } = useFocusable({
     focusKey: 'category-grid',
     trackChildren: true,
   });
+  const hasSearch = hasSearchQuery(searchQuery);
+  const matchesSearch = useMemo(() => createSearchMatcher(searchQuery), [searchQuery]);
+  const visibleCategories = useMemo(() => {
+    if (!hasSearch) return categories;
+
+    return categories.filter((category) => matchesSearch(category.name));
+  }, [categories, hasSearch, matchesSearch]);
+
+  const focusFirstCategory = useCallback(() => {
+    setFocus(
+      visibleCategories.length > 0
+        ? `category-card-${createFocusKeyPart(visibleCategories[0].id)}`
+        : 'category-grid-search'
+    );
+  }, [visibleCategories]);
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    setSearchQuery('');
+    setSearchOpen(false);
+    window.setTimeout(() => setFocus('category-grid-search'), 0);
+  }, []);
 
   useEffect(() => {
+    if (searchOpen) return;
+
     const timeout = window.setTimeout(() => {
-      setFocus(categories.length > 0 ? `category-card-${createFocusKeyPart(categories[0].id)}` : 'category-grid-back');
+      focusFirstCategory();
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, [categories]);
+  }, [focusFirstCategory, searchOpen]);
 
   return (
     <FocusContext.Provider value={focusKey}>
@@ -122,16 +177,49 @@ export default function CategoryGrid({
             <h1>{title}</h1>
             <p>{subtitle}</p>
           </div>
-          <LogoutButton onLogout={onLogout} />
+          <div className={styles.topActions}>
+            {searchOpen && (
+              <label className={styles.searchBox}>
+                <Search size={22} />
+                <input
+                  ref={searchInputRef}
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      closeSearch();
+                    }
+
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      searchInputRef.current?.blur();
+                      focusFirstCategory();
+                    }
+                  }}
+                  placeholder="Buscar pasta"
+                  aria-label="Buscar pasta"
+                />
+              </label>
+            )}
+            <SearchButton onOpen={openSearch} />
+            <LogoutButton onLogout={onLogout} />
+          </div>
         </div>
 
         {isLoading ? (
           <div className={styles.loading}>Carregando categorias...</div>
         ) : (
           <div className={styles.grid}>
-            {categories.map((category) => (
-              <CategoryCard key={category.id} category={category} onSelect={onSelect} />
-            ))}
+            {visibleCategories.length > 0 ? (
+              visibleCategories.map((category) => (
+                <CategoryCard key={category.id} category={category} onSelect={onSelect} />
+              ))
+            ) : (
+              <div className={styles.emptyState}>Nenhuma pasta encontrada com esse nome.</div>
+            )}
           </div>
         )}
       </section>
