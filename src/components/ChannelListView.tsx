@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, LogOut, Play, Search, Star } from 'lucide-react';
+import { ArrowLeft, Play, Search, Star } from 'lucide-react';
 import {
   FocusContext,
   setFocus,
   useFocusable,
 } from '@noriginmedia/norigin-spatial-navigation';
+import { appCopy, type AppLanguage } from '@/lib/i18n';
 import { createIndexedSearchMatcher, createSearchIndex, hasSearchQuery } from '@/lib/search';
 import styles from './ChannelListView.module.css';
 
@@ -29,12 +30,12 @@ type ChannelListViewProps = {
   favoriteFeedback: string;
   emptyMessage?: string;
   onBack: () => void;
-  onLogout: () => void;
   onChannelFocus: (channel: ChannelListViewChannel) => void;
   onChannelPress: (channel: ChannelListViewChannel) => void;
   onFavoriteToggle: (channel: ChannelListViewChannel) => void;
   onEndReached?: () => void;
   onPreviewPress: () => void;
+  language: AppLanguage;
 };
 
 export const createChannelFocusKeyPart = (value: string | number) =>
@@ -146,6 +147,7 @@ function ChannelListItem({
   onFocus,
   onPress,
   onFavoriteToggle,
+  labels,
 }: {
   channel: ChannelListViewChannel;
   index: number;
@@ -155,6 +157,7 @@ function ChannelListItem({
   onFocus: (channel: ChannelListViewChannel) => void;
   onPress: (channel: ChannelListViewChannel) => void;
   onFavoriteToggle: (channel: ChannelListViewChannel) => void;
+  labels: { readyFullscreen: string; okSelect: string };
 }) {
   const focusKey = getChannelFocusKey(channel.id);
   const enterHandlers = useLongEnterPress(
@@ -204,7 +207,7 @@ function ChannelListItem({
           {channel.name}
           {favorite && <Star className={styles.favoriteStar} size={18} fill="currentColor" />}
         </span>
-        <span className={styles.channelMeta}>{prepared ? 'Pronto para tela cheia' : 'OK seleciona, OK novamente assiste'}</span>
+        <span className={styles.channelMeta}>{prepared ? labels.readyFullscreen : labels.okSelect}</span>
       </span>
     </button>
   );
@@ -216,12 +219,20 @@ function PreviewPanel({
   favorite,
   onPreviewPress,
   onFavoriteToggle,
+  labels,
 }: {
   channel: ChannelListViewChannel | null;
   prepared: boolean;
   favorite: boolean;
   onPreviewPress: () => void;
   onFavoriteToggle: (channel: ChannelListViewChannel) => void;
+  labels: {
+    selected: string;
+    lightweightPreview: string;
+    fullscreenHint: string;
+    selectChannel: string;
+    selectChannelDescription: string;
+  };
 }) {
   const enterHandlers = useLongEnterPress(
     onPreviewPress,
@@ -262,12 +273,12 @@ function PreviewPanel({
             {!channel.logo && <span>N</span>}
           </div>
           <div className={styles.previewOverlay}>
-            <span className={styles.previewBadge}>{prepared ? 'Selecionado' : 'Preview leve'}</span>
+            <span className={styles.previewBadge}>{prepared ? labels.selected : labels.lightweightPreview}</span>
             <h2>
               {channel.name}
               {favorite && <Star className={styles.favoriteStar} size={22} fill="currentColor" />}
             </h2>
-            <p>OK para assistir em tela cheia</p>
+            <p>{labels.fullscreenHint}</p>
           </div>
           <span className={styles.playIcon}>
             <Play size={34} fill="currentColor" />
@@ -276,8 +287,8 @@ function PreviewPanel({
       ) : (
         <div className={styles.emptyPreview}>
           <span>N</span>
-          <h2>Selecione um canal</h2>
-          <p>Use a lista ao lado para preparar o preview.</p>
+          <h2>{labels.selectChannel}</h2>
+          <p>{labels.selectChannelDescription}</p>
         </div>
       )}
     </button>
@@ -296,13 +307,14 @@ export default function ChannelListView({
   favoriteFeedback,
   emptyMessage,
   onBack,
-  onLogout,
   onChannelFocus,
   onChannelPress,
   onFavoriteToggle,
   onEndReached,
   onPreviewPress,
+  language,
 }: ChannelListViewProps) {
+  const copy = appCopy[language];
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResultLimit, setSearchResultLimit] = useState(SEARCH_RESULT_BATCH_SIZE);
@@ -404,10 +416,10 @@ export default function ChannelListView({
             focusKey="content-back"
             className={styles.backButton}
             onPress={onBack}
-            title="Voltar para pastas"
+            title={copy.content.backToFolders}
           >
             <ArrowLeft size={24} />
-            <span>Pastas</span>
+            <span>{copy.common.folders}</span>
           </HeaderButton>
 
           <div className={styles.heading}>
@@ -437,8 +449,8 @@ export default function ChannelListView({
                       focusFirstChannel();
                     }
                   }}
-                  placeholder="Buscar conteudo"
-                  aria-label="Buscar conteudo"
+                  placeholder={copy.content.searchContent}
+                  aria-label={copy.content.searchContent}
                 />
               </label>
             )}
@@ -447,18 +459,9 @@ export default function ChannelListView({
               focusKey="content-search"
               className={styles.iconButton}
               onPress={openSearch}
-              title="Buscar"
+              title={copy.common.search}
             >
               <Search size={27} />
-            </HeaderButton>
-
-            <HeaderButton
-              focusKey="content-logout"
-              className={styles.iconButton}
-              onPress={onLogout}
-              title="Sair"
-            >
-              <LogOut size={27} />
             </HeaderButton>
           </div>
         </header>
@@ -468,14 +471,14 @@ export default function ChannelListView({
             <div className={styles.listTitle}>
               <span>
                 {hasSearch
-                  ? `${visibleChannels.length} de ${searchResult.total}`
-                  : `${channels.length} de ${totalChannelCount}`}
+                  ? `${visibleChannels.length} / ${searchResult.total}`
+                  : `${channels.length} / ${totalChannelCount}`}
               </span>
-              <strong>{hasSearch ? 'Resultado da busca' : hasMoreChannels ? 'Canais carregando em blocos' : 'Canais'}</strong>
+              <strong>{hasSearch ? copy.content.searchResult : hasMoreChannels ? copy.content.blockLoading : copy.content.channels}</strong>
             </div>
 
             {isLoading ? (
-              <div className={styles.loading}>Carregando conteudos...</div>
+              <div className={styles.loading}>{copy.content.loading}</div>
             ) : (
               <div className={styles.channelList}>
                 {visibleChannels.length > 0 ? (
@@ -501,13 +504,17 @@ export default function ChannelListView({
                       }}
                       onPress={onChannelPress}
                       onFavoriteToggle={onFavoriteToggle}
+                      labels={{
+                        readyFullscreen: copy.content.readyFullscreen,
+                        okSelect: copy.content.okSelect,
+                      }}
                     />
                   ))
                 ) : (
                   <div className={styles.emptyList}>
                     {hasSearch
-                      ? 'Nenhum conteudo encontrado com esse nome.'
-                      : emptyMessage || 'Nenhum conteudo encontrado nesta pasta.'}
+                      ? copy.content.emptySearch
+                      : emptyMessage || copy.content.emptyFolder}
                   </div>
                 )}
               </div>
@@ -521,6 +528,13 @@ export default function ChannelListView({
               favorite={selectedChannelFavorite}
               onPreviewPress={onPreviewPress}
               onFavoriteToggle={onFavoriteToggle}
+              labels={{
+                selected: copy.content.selected,
+                lightweightPreview: copy.content.lightweightPreview,
+                fullscreenHint: copy.content.fullscreenHint,
+                selectChannel: copy.content.selectChannel,
+                selectChannelDescription: copy.content.selectChannelDescription,
+              }}
             />
 
             {favoriteFeedback && (
@@ -528,11 +542,11 @@ export default function ChannelListView({
             )}
 
             <div className={styles.remoteHint}>
-              <span>↑↓ canais</span>
-              <span>→ preview</span>
-              <span>OK tela cheia</span>
-              <span>Busca em todos</span>
-              <span>Segure OK favoritos</span>
+              <span>{copy.content.remoteChannelNav}</span>
+              <span>{copy.content.remotePreviewNav}</span>
+              <span>{copy.content.remoteFullscreen}</span>
+              <span>{copy.content.remoteSearchAll}</span>
+              <span>{copy.content.remoteFavorites}</span>
             </div>
           </aside>
         </div>

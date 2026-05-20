@@ -10,7 +10,6 @@ import {
   Search,
   Star,
   ListVideo,
-  LogOut,
 } from 'lucide-react';
 import {
   useFocusable,
@@ -29,14 +28,12 @@ type MenuItem = {
 type SidebarProps = {
   activeTab: string;
   onTabChange: (tabId: string) => void;
-  onLogout: () => void;
 };
 
 type FocusableMenuItemProps = {
   item: MenuItem;
   activeTab: string;
   onTabChange: (tabId: string) => void;
-  onLogout?: () => void;
   isChild?: boolean;
 };
 
@@ -78,26 +75,19 @@ const menuItems: MenuItem[] = [
   },
 
   { icon: Settings, label: 'Ajustes', id: 'settings', focusKey: 'sidebar-settings' },
-  { icon: LogOut, label: 'Sair', id: 'logout', focusKey: 'sidebar-logout' },
 ];
 
 function FocusableMenuItem({
   item,
   activeTab,
   onTabChange,
-  onLogout,
   isChild = false,
 }: FocusableMenuItemProps) {
   const isActive =
-    (item.id !== 'logout' && activeTab === item.id) ||
+    activeTab === item.id ||
     item.children?.some((child: MenuItem) => child.id === activeTab);
 
   const handlePress = () => {
-    if (item.id === 'logout') {
-      onLogout?.();
-      return;
-    }
-
     onTabChange(item.id);
   };
 
@@ -113,7 +103,6 @@ function FocusableMenuItem({
       className={`
         ${styles.navItem}
         ${isChild ? styles.subItem : ''}
-        ${item.id === 'logout' ? styles.logoutItem : ''}
         ${isActive ? styles.active : ''}
         ${focused ? styles.focused : ''}
       `}
@@ -126,7 +115,7 @@ function FocusableMenuItem({
   );
 }
 
-export default function Sidebar({ activeTab, onTabChange, onLogout }: SidebarProps) {
+export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   const { ref, focusKey } = useFocusable({
     focusKey: 'sidebar',
     trackChildren: true,
@@ -150,7 +139,6 @@ export default function Sidebar({ activeTab, onTabChange, onLogout }: SidebarPro
                 item={item}
                 activeTab={activeTab}
                 onTabChange={onTabChange}
-                onLogout={onLogout}
               />
 
               {item.children && (
@@ -161,7 +149,6 @@ export default function Sidebar({ activeTab, onTabChange, onLogout }: SidebarPro
                       item={child}
                       activeTab={activeTab}
                       onTabChange={onTabChange}
-                      onLogout={onLogout}
                       isChild
                     />
                   ))}

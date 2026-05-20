@@ -1,19 +1,21 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { Film, LogOut, PlayCircle, Tv } from 'lucide-react';
+import { Film, PlayCircle, Settings, Tv } from 'lucide-react';
 import {
   FocusContext,
   setFocus,
   useFocusable,
 } from '@noriginmedia/norigin-spatial-navigation';
+import { appCopy, type AppLanguage } from '@/lib/i18n';
 import styles from './MainMenu.module.css';
 
-export type MainMenuSection = 'live' | 'movies' | 'series';
+export type MainMenuSection = 'live' | 'movies' | 'series' | 'settings';
 
 type MainMenuProps = {
   onSelect: (section: MainMenuSection) => void;
-  onLogout: () => void;
+  initialFocusKey?: string;
+  language: AppLanguage;
 };
 
 type MenuCard = {
@@ -23,30 +25,6 @@ type MenuCard = {
   icon: React.ElementType;
   focusKey: string;
 };
-
-const menuCards: MenuCard[] = [
-  {
-    id: 'live',
-    title: 'TV ao Vivo',
-    description: 'Canais organizados por categoria.',
-    icon: Tv,
-    focusKey: 'main-menu-live',
-  },
-  {
-    id: 'movies',
-    title: 'Filmes',
-    description: 'Pastas de filmes por colecao.',
-    icon: Film,
-    focusKey: 'main-menu-movies',
-  },
-  {
-    id: 'series',
-    title: 'Series',
-    description: 'Temporadas e series em categorias.',
-    icon: PlayCircle,
-    focusKey: 'main-menu-series',
-  },
-];
 
 function MainMenuCard({ card, onSelect }: { card: MenuCard; onSelect: (section: MainMenuSection) => void }) {
   const Icon = card.icon;
@@ -71,27 +49,38 @@ function MainMenuCard({ card, onSelect }: { card: MenuCard; onSelect: (section: 
   );
 }
 
-function MainMenuLogoutButton({ onLogout }: { onLogout: () => void }) {
-  const { ref, focused } = useFocusable({
-    focusKey: 'main-menu-logout',
-    onEnterPress: onLogout,
-  });
-
-  return (
-    <button
-      ref={ref}
-      type="button"
-      className={`${styles.iconAction} ${focused ? styles.focused : ''}`}
-      onClick={onLogout}
-      aria-label="Sair"
-      title="Sair"
-    >
-      <LogOut size={28} />
-    </button>
-  );
-}
-
-export default function MainMenu({ onSelect, onLogout }: MainMenuProps) {
+export default function MainMenu({ onSelect, initialFocusKey = 'main-menu-live', language }: MainMenuProps) {
+  const copy = appCopy[language].mainMenu;
+  const menuCards: MenuCard[] = [
+    {
+      id: 'live',
+      title: copy.live,
+      description: copy.liveDescription,
+      icon: Tv,
+      focusKey: 'main-menu-live',
+    },
+    {
+      id: 'movies',
+      title: copy.movies,
+      description: copy.moviesDescription,
+      icon: Film,
+      focusKey: 'main-menu-movies',
+    },
+    {
+      id: 'series',
+      title: copy.series,
+      description: copy.seriesDescription,
+      icon: PlayCircle,
+      focusKey: 'main-menu-series',
+    },
+    {
+      id: 'settings',
+      title: copy.settings,
+      description: copy.settingsDescription,
+      icon: Settings,
+      focusKey: 'main-menu-settings',
+    },
+  ];
   const { ref, focusKey } = useFocusable({
     focusKey: 'main-menu',
     trackChildren: true,
@@ -99,11 +88,11 @@ export default function MainMenu({ onSelect, onLogout }: MainMenuProps) {
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setFocus('main-menu-live');
+      setFocus(initialFocusKey);
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, []);
+  }, [initialFocusKey]);
 
   return (
     <FocusContext.Provider value={focusKey}>
@@ -113,14 +102,13 @@ export default function MainMenu({ onSelect, onLogout }: MainMenuProps) {
             <div className={styles.brandIcon}>N</div>
             <span>Nuvix</span>
           </div>
-          <MainMenuLogoutButton onLogout={onLogout} />
         </div>
 
         <div className={styles.header}>
           <div>
-            <span className={styles.eyebrow}>Media Player</span>
-            <h1>Escolha uma categoria</h1>
-            <p>Entre rapidamente no que quer assistir, com navegacao simples para TV.</p>
+            <span className={styles.eyebrow}>{copy.eyebrow}</span>
+            <h1>{copy.title}</h1>
+            <p>{copy.subtitle}</p>
           </div>
         </div>
 

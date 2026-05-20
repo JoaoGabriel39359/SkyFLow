@@ -33,7 +33,7 @@ export default function Login() {
             } else {
                 setError(data.detail || 'Erro ao fazer login');
             }
-        } catch (err) {
+        } catch {
             setError('Falha de conexão com o servidor');
         } finally {
             setLoading(false);

@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import VideoPlayer from '@/components/VideoPlayer';
 import MainMenu, { MainMenuSection } from '@/components/MainMenu';
+import SettingsScreen from '@/components/SettingsScreen';
 import CategoryGrid, { MediaCategory } from '@/components/CategoryGrid';
 import ChannelListView, {
   ChannelListViewChannel,
@@ -12,6 +13,8 @@ import ChannelListView, {
 import { getCategories, getStreams, buildStreamUrl } from '@/lib/iptvEngine';
 import { getDeviceId } from '@/lib/device';
 import { getFavoriteIds, getFavorites, toggleFavorite } from '@/lib/favorites';
+import { appCopy, type AppLanguage } from '@/lib/i18n';
+import { DEFAULT_APP_SETTINGS, getAppSettings, saveAppSettings, type AppSettings } from '@/lib/settings';
 import { init, setFocus, useFocusable, FocusContext } from '@noriginmedia/norigin-spatial-navigation';
 
 init({
@@ -27,21 +30,7 @@ type ActionParams = {
 
 const FALLBACK_LOGO = 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=800&auto=format&fit=crop&q=60';
 const CONTENT_BATCH_SIZE = 60;
-
-const mediaTitles: Record<MainMenuSection, { title: string; subtitle: string }> = {
-  live: {
-    title: 'TV ao Vivo',
-    subtitle: 'Escolha uma pasta para carregar apenas os canais dessa categoria.',
-  },
-  movies: {
-    title: 'Filmes',
-    subtitle: 'Navegue pelas pastas de filmes e carregue somente o que deseja assistir.',
-  },
-  series: {
-    title: 'Series',
-    subtitle: 'Selecione uma pasta para listar as series disponiveis.',
-  },
-};
+type MediaSection = Exclude<MainMenuSection, 'settings'>;
 
 const getActionParams = (tab: string): ActionParams => {
   if (tab.includes('movies')) {
@@ -55,19 +44,20 @@ const getActionParams = (tab: string): ActionParams => {
   return { cat: 'get_live_categories', stream: 'get_live_streams', type: 'live' };
 };
 
-const getCurrentMediaKey = (tab: string): MainMenuSection => {
+const getCurrentMediaKey = (tab: string): MediaSection => {
   if (tab.includes('movies')) return 'movies';
   if (tab.includes('series')) return 'series';
   return 'live';
 };
 
-const emptyFavoriteIds: Record<MainMenuSection, string[]> = {
+const emptyFavoriteIds: Record<MediaSection, string[]> = {
   live: [],
   movies: [],
   series: [],
 };
 
 type LogoutConfirmModalProps = {
+  language: AppLanguage;
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -97,7 +87,8 @@ function LogoutConfirmButton({ className, focusKey, onPress, children }: LogoutC
   );
 }
 
-function LogoutConfirmModal({ onCancel, onConfirm }: LogoutConfirmModalProps) {
+function LogoutConfirmModal({ language, onCancel, onConfirm }: LogoutConfirmModalProps) {
+  const copy = appCopy[language].common;
   const { ref, focusKey } = useFocusable({
     focusKey: 'logout-confirm-modal',
     trackChildren: true,
@@ -128,8 +119,8 @@ function LogoutConfirmModal({ onCancel, onConfirm }: LogoutConfirmModalProps) {
       <div className="logoutModalOverlay" role="presentation">
         <div className="logoutModal" ref={ref} role="dialog" aria-modal="true" aria-labelledby="logout-modal-title">
           <div className="logoutModalIcon">N</div>
-          <h2 id="logout-modal-title">Deseja realmente sair?</h2>
-          <p>Ao confirmar, este dispositivo volta para a tela de ativacao do codigo.</p>
+          <h2 id="logout-modal-title">{copy.logoutTitle}</h2>
+          <p>{copy.logoutDescription}</p>
 
           <div className="logoutModalActions">
             <LogoutConfirmButton
@@ -137,7 +128,7 @@ function LogoutConfirmModal({ onCancel, onConfirm }: LogoutConfirmModalProps) {
               focusKey="logout-confirm-cancel"
               onPress={onCancel}
             >
-              Cancelar
+              {copy.cancel}
             </LogoutConfirmButton>
 
             <LogoutConfirmButton
@@ -145,7 +136,7 @@ function LogoutConfirmModal({ onCancel, onConfirm }: LogoutConfirmModalProps) {
               focusKey="logout-confirm-confirm"
               onPress={onConfirm}
             >
-              Deslogar
+              {copy.confirmLogout}
             </LogoutConfirmButton>
           </div>
         </div>
@@ -168,14 +159,17 @@ export default function Home() {
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [mainMenuFocusKey, setMainMenuFocusKey] = useState('main-menu-live');
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [loadedCategories, setLoadedCategories] = useState<any[]>([]);
   const [allCategoryChannels, setAllCategoryChannels] = useState<ChannelListViewChannel[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<MediaCategory | null>(null);
-  const [favoriteIdsByType, setFavoriteIdsByType] = useState<Record<MainMenuSection, string[]>>(emptyFavoriteIds);
+  const [favoriteIdsByType, setFavoriteIdsByType] = useState<Record<MediaSection, string[]>>(emptyFavoriteIds);
   const [favoriteFeedback, setFavoriteFeedback] = useState('');
   const hasSetInitialFocus = useRef(false);
   const categoryContentCache = useRef(new Map<string, ChannelListViewChannel[]>());
+  const copy = appCopy[appSettings.language];
 
   const checkDeviceSecurity = useCallback(async () => {
     const deviceId = getDeviceId();
@@ -227,6 +221,14 @@ export default function Home() {
         movies: getFavoriteIds('movies'),
         series: getFavoriteIds('series'),
       });
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setAppSettings(getAppSettings());
     }, 0);
 
     return () => window.clearTimeout(timeout);
@@ -330,6 +332,7 @@ export default function Home() {
     localStorage.removeItem('skyflow_device_id');
     hasSetInitialFocus.current = false;
     setSelectedChannel(null);
+    setMainMenuFocusKey('main-menu-live');
     setActiveTab('home');
     setAllCategories([]);
     setLoadedCategories([]);
@@ -348,10 +351,12 @@ export default function Home() {
   }, []);
 
   const handleMainMenuSelect = useCallback((section: MainMenuSection) => {
+    setMainMenuFocusKey(`main-menu-${section}`);
     setActiveTab(section);
   }, []);
 
   const handleBackToMainMenu = useCallback(() => {
+    setMainMenuFocusKey('main-menu-live');
     setActiveTab('home');
     setAllCategories([]);
     setLoadedCategories([]);
@@ -360,6 +365,20 @@ export default function Home() {
     setPreviewChannel(null);
     setPreparedPreviewChannelId(null);
     window.setTimeout(() => setFocus('main-menu-live'), 0);
+  }, []);
+
+  const handleBackFromSettings = useCallback(() => {
+    setMainMenuFocusKey('main-menu-settings');
+    setActiveTab('home');
+  }, []);
+
+  const handleSettingsChange = useCallback((nextSettings: AppSettings) => {
+    setAppSettings(nextSettings);
+    saveAppSettings(nextSettings);
+  }, []);
+
+  const handleClearCatalogCache = useCallback(() => {
+    categoryContentCache.current.clear();
   }, []);
 
   const handleBackToCategories = useCallback(() => {
@@ -380,11 +399,11 @@ export default function Home() {
     }));
 
     return [
-      { id: `${currentMediaKey}-favorites`, name: 'Favoritos', isFavorites: true },
-      { id: `${currentMediaKey}-all`, name: 'Todos', isAll: true },
+      { id: `${currentMediaKey}-favorites`, name: copy.media.favorites, isFavorites: true },
+      { id: `${currentMediaKey}-all`, name: copy.media.all, isAll: true },
       ...mappedCategories,
     ];
-  }, [allCategories, currentMediaKey]);
+  }, [allCategories, copy.media.all, copy.media.favorites, currentMediaKey]);
 
   const loadCategoryStreams = useCallback(async (category: MediaCategory) => {
     if (!credentials) return;
@@ -546,7 +565,7 @@ export default function Home() {
       ...previousIds,
       [currentMediaKey]: nextFavoriteIds,
     }));
-    setFavoriteFeedback(result.isFavorite ? 'Adicionado aos favoritos' : 'Removido dos favoritos');
+    setFavoriteFeedback(result.isFavorite ? copy.content.favoriteAdded : copy.content.favoriteRemoved);
 
     if (selectedCategory?.isFavorites && !result.isFavorite) {
       const channelIndex = currentChannels.findIndex((currentChannel) => currentChannel.id === channel.id);
@@ -566,7 +585,7 @@ export default function Home() {
         setFocus(nextChannel ? getChannelFocusKey(nextChannel.id) : 'content-back');
       }, 0);
     }
-  }, [currentChannels, currentMediaKey, selectedCategory]);
+  }, [copy.content.favoriteAdded, copy.content.favoriteRemoved, currentChannels, currentMediaKey, selectedCategory]);
 
   const handlePreviewPress = useCallback(() => {
     if (!previewChannel) return;
@@ -585,6 +604,23 @@ export default function Home() {
     return () => window.clearTimeout(timeout);
   }, [favoriteFeedback]);
 
+  const activeDeviceId = typeof window === 'undefined' ? '' : getDeviceId();
+  const accountStatus = isLoggedIn && !isBlocked ? copy.settings.active : copy.common.waitingActivation;
+  const currentMediaTexts = {
+    live: {
+      title: copy.media.liveTitle,
+      subtitle: copy.media.liveSubtitle,
+    },
+    movies: {
+      title: copy.media.moviesTitle,
+      subtitle: copy.media.moviesSubtitle,
+    },
+    series: {
+      title: copy.media.seriesTitle,
+      subtitle: copy.media.seriesSubtitle,
+    },
+  } satisfies Record<MediaSection, { title: string; subtitle: string }>;
+
   if (isInitialLoading) {
     return (
       <div className="nuvixLoading">
@@ -592,7 +628,7 @@ export default function Home() {
         <div className="nuvixLoaderCard">
           <h1>Nuvix</h1>
           <div className="loadingBar"><span></span></div>
-          <p>Carregando sua experiencia...</p>
+          <p>{copy.common.loadingExperience}</p>
         </div>
       </div>
     );
@@ -603,14 +639,14 @@ export default function Home() {
       <div className="nuvixLoading">
         <div className="nuvixLoaderCard activationCard">
           <h1>Nuvix</h1>
-          <p className="activationStatus">AGUARDANDO ATIVACAO</p>
+          <p className="activationStatus">{copy.common.waitingActivation}</p>
           <div className="activationInfo">
-            <small>ID DO DISPOSITIVO:</small><br />
+            <small>{copy.common.deviceId}</small><br />
             <code>{activationData?.mac}</code><br /><br />
-            <small>CODIGO DE ATIVACAO:</small><br />
+            <small>{copy.common.activationCode}</small><br />
             <code>{activationData?.device_key}</code>
           </div>
-          <p className="activationHelp">Envie esses dados para seu revendedor liberar seu acesso de 1 ano.</p>
+          <p className="activationHelp">{copy.common.activationHelp}</p>
         </div>
       </div>
     );
@@ -625,20 +661,35 @@ export default function Home() {
       }}
     >
       {activeTab === 'home' ? (
-        <MainMenu onSelect={handleMainMenuSelect} onLogout={handleOpenLogoutConfirm} />
+        <MainMenu
+          onSelect={handleMainMenuSelect}
+          initialFocusKey={mainMenuFocusKey}
+          language={appSettings.language}
+        />
+      ) : activeTab === 'settings' ? (
+        <SettingsScreen
+          settings={appSettings}
+          deviceId={activeDeviceId}
+          accountStatus={accountStatus}
+          onSettingsChange={handleSettingsChange}
+          onBack={handleBackFromSettings}
+          onLogout={handleOpenLogoutConfirm}
+          onRefreshAccount={checkDeviceSecurity}
+          onClearCatalogCache={handleClearCatalogCache}
+        />
       ) : !selectedCategory ? (
         <CategoryGrid
-          title={mediaTitles[currentMediaKey].title}
-          subtitle={mediaTitles[currentMediaKey].subtitle}
+          title={currentMediaTexts[currentMediaKey].title}
+          subtitle={currentMediaTexts[currentMediaKey].subtitle}
           categories={categoryGridItems}
           isLoading={isLoadingCategories}
           onBack={handleBackToMainMenu}
-          onLogout={handleOpenLogoutConfirm}
           onSelect={loadCategoryStreams}
+          language={appSettings.language}
         />
       ) : (
         <ChannelListView
-          mediaTitle={mediaTitles[currentMediaKey].title}
+          mediaTitle={currentMediaTexts[currentMediaKey].title}
           categoryName={selectedCategory.name}
           channels={currentChannels}
           searchChannels={searchSourceChannels}
@@ -649,16 +700,16 @@ export default function Home() {
           favoriteFeedback={favoriteFeedback}
           emptyMessage={
             selectedCategory.isFavorites
-              ? 'Nenhum favorito ainda. Segure OK em um conteudo para adicionar aos favoritos.'
+              ? copy.content.emptyFavorites
               : undefined
           }
           onBack={handleBackToCategories}
-          onLogout={handleOpenLogoutConfirm}
           onChannelFocus={handleChannelFocus}
           onChannelPress={handleChannelPress}
           onFavoriteToggle={handleFavoriteToggle}
           onEndReached={handleLoadMoreContent}
           onPreviewPress={handlePreviewPress}
+          language={appSettings.language}
         />
       )}
 
@@ -678,11 +729,15 @@ export default function Home() {
           onNext={handleNextChannel}
           hasPrevious={selectedChannelIndex > 0}
           hasNext={selectedChannelIndex >= 0 && selectedChannelIndex < playableChannels.length - 1}
+          controlsHideDelayMs={appSettings.controlsHideDelayMs}
+          autoPlayNext={appSettings.autoPlayNext}
+          language={appSettings.language}
         />
       )}
 
       {isLogoutConfirmOpen && (
         <LogoutConfirmModal
+          language={appSettings.language}
           onCancel={() => setIsLogoutConfirmOpen(false)}
           onConfirm={handleLogout}
         />

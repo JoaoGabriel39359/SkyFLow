@@ -17,6 +17,7 @@ import {
   FocusContext,
   setFocus,
 } from '@noriginmedia/norigin-spatial-navigation';
+import { appCopy, type AppLanguage } from '@/lib/i18n';
 import styles from './VideoPlayer.module.css';
 
 interface VideoPlayerProps {
@@ -27,6 +28,9 @@ interface VideoPlayerProps {
   hasPrevious: boolean;
   hasNext: boolean;
   title: string;
+  controlsHideDelayMs?: number;
+  autoPlayNext?: boolean;
+  language: AppLanguage;
 }
 
 type PlayerButtonProps = {
@@ -82,7 +86,11 @@ export default function VideoPlayer({
   hasPrevious,
   hasNext,
   title,
+  controlsHideDelayMs = 3500,
+  autoPlayNext = false,
+  language,
 }: VideoPlayerProps) {
+  const copy = appCopy[language].player;
   const videoRef = useRef<HTMLVideoElement>(null);
   const hideControlsTimeout = useRef<number | null>(null);
   const [isPaused, setIsPaused] = useState(true);
@@ -107,8 +115,8 @@ export default function VideoPlayer({
       window.clearTimeout(hideControlsTimeout.current);
     }
 
-    hideControlsTimeout.current = window.setTimeout(hideControls, 3500);
-  }, [hideControls]);
+    hideControlsTimeout.current = window.setTimeout(hideControls, controlsHideDelayMs);
+  }, [controlsHideDelayMs, hideControls]);
 
   const showControls = useCallback((focusKeyToRestore?: string) => {
     setControlsVisible(true);
@@ -255,10 +263,10 @@ export default function VideoPlayer({
             focusKey="player-back"
             className={styles.backBtn}
             onPress={onClose}
-            title="Voltar"
+            title={copy.back}
           >
             <ArrowLeft size={24} />
-            <span>Voltar</span>
+            <span>{copy.back}</span>
           </PlayerButton>
 
           <h2 className={styles.title}>{title}</h2>
@@ -267,7 +275,7 @@ export default function VideoPlayer({
             focusKey="player-close"
             className={styles.iconBtn}
             onPress={onClose}
-            title="Fechar"
+            title={copy.close}
           >
             <X size={30} />
           </PlayerButton>
@@ -278,7 +286,7 @@ export default function VideoPlayer({
           className={`${styles.channelBtn} ${styles.previousBtn}`}
           disabled={!hasPrevious}
           onPress={onPrevious}
-          title="Canal anterior"
+          title={copy.channelPrevious}
         >
           <ChevronLeft size={42} />
         </PlayerButton>
@@ -288,7 +296,7 @@ export default function VideoPlayer({
           className={`${styles.channelBtn} ${styles.nextBtn}`}
           disabled={!hasNext}
           onPress={onNext}
-          title="Proximo canal"
+          title={copy.channelNext}
         >
           <ChevronRight size={42} />
         </PlayerButton>
@@ -298,6 +306,11 @@ export default function VideoPlayer({
           className={styles.video}
           tabIndex={-1}
           autoPlay
+          onEnded={() => {
+            if (autoPlayNext && hasNext) {
+              onNext();
+            }
+          }}
           onPlay={() => setIsPaused(false)}
           onPause={() => setIsPaused(true)}
           onVolumeChange={(event) => setIsMuted(event.currentTarget.muted)}
@@ -308,10 +321,10 @@ export default function VideoPlayer({
             focusKey="player-play"
             className={styles.controlBtn}
             onPress={togglePlay}
-            title={isPaused ? 'Reproduzir' : 'Pausar'}
+            title={isPaused ? copy.play : copy.pause}
           >
             {isPaused ? <Play size={24} fill="currentColor" /> : <Pause size={24} fill="currentColor" />}
-            <span>{isPaused ? 'Reproduzir' : 'Pausar'}</span>
+            <span>{isPaused ? copy.play : copy.pause}</span>
           </PlayerButton>
 
           <PlayerButton
@@ -319,10 +332,10 @@ export default function VideoPlayer({
             className={styles.controlBtn}
             disabled={!hasPrevious}
             onPress={onPrevious}
-            title="Canal anterior"
+            title={copy.channelPrevious}
           >
             <ChevronLeft size={24} />
-            <span>Anterior</span>
+            <span>{copy.previous}</span>
           </PlayerButton>
 
           <PlayerButton
@@ -330,9 +343,9 @@ export default function VideoPlayer({
             className={styles.controlBtn}
             disabled={!hasNext}
             onPress={onNext}
-            title="Proximo canal"
+            title={copy.channelNext}
           >
-            <span>Proximo</span>
+            <span>{copy.next}</span>
             <ChevronRight size={24} />
           </PlayerButton>
 
@@ -340,17 +353,17 @@ export default function VideoPlayer({
             focusKey="player-mute"
             className={styles.controlBtn}
             onPress={toggleMute}
-            title={isMuted ? 'Ativar som' : 'Silenciar'}
+            title={isMuted ? copy.sound : copy.mute}
           >
             {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
-            <span>{isMuted ? 'Som' : 'Mudo'}</span>
+            <span>{isMuted ? copy.sound : copy.mute}</span>
           </PlayerButton>
         </div>
 
         <div className={styles.controlsHint}>
-          <span>Setas: navegar</span>
-          <span>OK: selecionar</span>
-          <span>CH+/CH- trocar canal</span>
+          <span>{copy.hintArrows}</span>
+          <span>{copy.hintOk}</span>
+          <span>{copy.hintChannels}</span>
         </div>
       </div>
     </FocusContext.Provider>

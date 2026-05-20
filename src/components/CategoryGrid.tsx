@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Folder, LogOut, Search, Star } from 'lucide-react';
+import { ArrowLeft, Folder, Search, Star } from 'lucide-react';
 import {
   FocusContext,
   setFocus,
   useFocusable,
 } from '@noriginmedia/norigin-spatial-navigation';
+import { appCopy, type AppLanguage } from '@/lib/i18n';
 import { createSearchMatcher, hasSearchQuery } from '@/lib/search';
 import styles from './CategoryGrid.module.css';
 
@@ -23,17 +24,25 @@ type CategoryGridProps = {
   categories: MediaCategory[];
   isLoading: boolean;
   onBack: () => void;
-  onLogout: () => void;
   onSelect: (category: MediaCategory) => void;
+  language: AppLanguage;
 };
 
 const createFocusKeyPart = (value: string | number) =>
   String(value).replace(/[^a-zA-Z0-9_-]/g, '-');
 
-function BackButton({ onBack }: { onBack: () => void }) {
+function BackButton({ onBack, label }: { onBack: () => void; label: string }) {
   const { ref, focused } = useFocusable({
     focusKey: 'category-grid-back',
     onEnterPress: onBack,
+    onArrowPress: (direction) => {
+      if (direction === 'right') {
+        setFocus('category-grid-search');
+        return false;
+      }
+
+      return true;
+    },
   });
 
   return (
@@ -44,35 +53,23 @@ function BackButton({ onBack }: { onBack: () => void }) {
       onClick={onBack}
     >
       <ArrowLeft size={24} />
-      <span>Voltar</span>
+      <span>{label}</span>
     </button>
   );
 }
 
-function LogoutButton({ onLogout }: { onLogout: () => void }) {
-  const { ref, focused } = useFocusable({
-    focusKey: 'category-grid-logout',
-    onEnterPress: onLogout,
-  });
-
-  return (
-    <button
-      ref={ref}
-      type="button"
-      className={`${styles.iconAction} ${focused ? styles.focused : ''}`}
-      onClick={onLogout}
-      aria-label="Sair"
-      title="Sair"
-    >
-      <LogOut size={28} />
-    </button>
-  );
-}
-
-function SearchButton({ onOpen }: { onOpen: () => void }) {
+function SearchButton({ onOpen, label }: { onOpen: () => void; label: string }) {
   const { ref, focused } = useFocusable({
     focusKey: 'category-grid-search',
     onEnterPress: onOpen,
+    onArrowPress: (direction) => {
+      if (direction === 'left') {
+        setFocus('category-grid-back');
+        return false;
+      }
+
+      return true;
+    },
   });
 
   return (
@@ -81,15 +78,23 @@ function SearchButton({ onOpen }: { onOpen: () => void }) {
       type="button"
       className={`${styles.iconAction} ${focused ? styles.focused : ''}`}
       onClick={onOpen}
-      aria-label="Buscar"
-      title="Buscar"
+      aria-label={label}
+      title={label}
     >
       <Search size={28} />
     </button>
   );
 }
 
-function CategoryCard({ category, onSelect }: { category: MediaCategory; onSelect: (category: MediaCategory) => void }) {
+function CategoryCard({
+  category,
+  onSelect,
+  labels,
+}: {
+  category: MediaCategory;
+  onSelect: (category: MediaCategory) => void;
+  labels: { allBadge: string; favoritesBadge: string };
+}) {
   const focusKey = `category-card-${createFocusKeyPart(category.id)}`;
   const Icon = category.isFavorites ? Star : Folder;
   const { ref, focused } = useFocusable({
@@ -108,8 +113,8 @@ function CategoryCard({ category, onSelect }: { category: MediaCategory; onSelec
         <Icon size={34} fill={category.isFavorites ? 'currentColor' : 'none'} />
       </span>
       <span className={styles.categoryName}>{category.name}</span>
-      {category.isAll && <span className={styles.badge}>Tudo</span>}
-      {category.isFavorites && <span className={styles.favoriteBadge}>Favoritos</span>}
+      {category.isAll && <span className={styles.badge}>{labels.allBadge}</span>}
+      {category.isFavorites && <span className={styles.favoriteBadge}>{labels.favoritesBadge}</span>}
     </button>
   );
 }
@@ -120,9 +125,10 @@ export default function CategoryGrid({
   categories,
   isLoading,
   onBack,
-  onLogout,
   onSelect,
+  language,
 }: CategoryGridProps) {
+  const copy = appCopy[language];
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -171,9 +177,9 @@ export default function CategoryGrid({
     <FocusContext.Provider value={focusKey}>
       <section className={styles.screen} ref={ref}>
         <div className={styles.topbar}>
-          <BackButton onBack={onBack} />
+          <BackButton onBack={onBack} label={copy.common.back} />
           <div>
-            <span className={styles.eyebrow}>Pastas</span>
+            <span className={styles.eyebrow}>{copy.categoryGrid.eyebrow}</span>
             <h1>{title}</h1>
             <p>{subtitle}</p>
           </div>
@@ -199,26 +205,33 @@ export default function CategoryGrid({
                       focusFirstCategory();
                     }
                   }}
-                  placeholder="Buscar pasta"
-                  aria-label="Buscar pasta"
+                  placeholder={copy.categoryGrid.searchFolder}
+                  aria-label={copy.categoryGrid.searchFolder}
                 />
               </label>
             )}
-            <SearchButton onOpen={openSearch} />
-            <LogoutButton onLogout={onLogout} />
+            <SearchButton onOpen={openSearch} label={copy.common.search} />
           </div>
         </div>
 
         {isLoading ? (
-          <div className={styles.loading}>Carregando categorias...</div>
+          <div className={styles.loading}>{copy.categoryGrid.loading}</div>
         ) : (
           <div className={styles.grid}>
             {visibleCategories.length > 0 ? (
               visibleCategories.map((category) => (
-                <CategoryCard key={category.id} category={category} onSelect={onSelect} />
+                <CategoryCard
+                  key={category.id}
+                  category={category}
+                  onSelect={onSelect}
+                  labels={{
+                    allBadge: copy.categoryGrid.allBadge,
+                    favoritesBadge: copy.categoryGrid.favoritesBadge,
+                  }}
+                />
               ))
             ) : (
-              <div className={styles.emptyState}>Nenhuma pasta encontrada com esse nome.</div>
+              <div className={styles.emptyState}>{copy.categoryGrid.empty}</div>
             )}
           </div>
         )}
