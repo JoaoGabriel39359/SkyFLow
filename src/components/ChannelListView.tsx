@@ -9,6 +9,8 @@ import {
 } from '@noriginmedia/norigin-spatial-navigation';
 import { appCopy, type AppLanguage } from '@/lib/i18n';
 import { createIndexedSearchMatcher, createSearchIndex, hasSearchQuery } from '@/lib/search';
+import { useChannelEpg } from '@/hooks/useChannelEpg';
+import type { EpgProgram, XtreamCredentials } from '@/lib/epg';
 import styles from './ChannelListView.module.css';
 
 export type ChannelListViewChannel = {
@@ -28,6 +30,8 @@ type ChannelListViewProps = {
   isLoading: boolean;
   favoriteIds: string[];
   favoriteFeedback: string;
+  epgCredentials?: XtreamCredentials | null;
+  showEpg?: boolean;
   emptyMessage?: string;
   onBack: () => void;
   onChannelFocus: (channel: ChannelListViewChannel) => void;
@@ -44,12 +48,36 @@ export const createChannelFocusKeyPart = (value: string | number) =>
 export const getChannelFocusKey = (channelId: string | number) =>
   `content-channel-${createChannelFocusKeyPart(channelId)}`;
 
+const getEpgFocusKey = (index: number) => `content-epg-${index}`;
+
 const LONG_PRESS_MS = 800;
 const SEARCH_DEBOUNCE_MS = 220;
 const SEARCH_RESULT_BATCH_SIZE = 80;
+const SEARCH_SCAN_CHUNK_SIZE = 900;
+const MISSING_LOGO_MARKERS = [
+  'no-logo',
+  'no_logo',
+  'nologo',
+  'noimage',
+  'no-image',
+  'notfound',
+  'not-found',
+  'placeholder',
+  'unavailable',
+  'sem-logo',
+  'sem_logo',
+];
 
 type EnterDetails = {
   pressedKeys?: Record<string, number>;
+};
+
+type SearchResultState = {
+  query: string;
+  limit: number;
+  total: number;
+  channels: ChannelListViewChannel[];
+  isSearching: boolean;
 };
 
 function useLongEnterPress(onShortPress: () => void, onLongPress: () => void) {
@@ -105,6 +133,88 @@ function useDebouncedValue(value: string, delay: number) {
   }, [delay, value]);
 
   return debouncedValue;
+}
+
+function isLikelyMissingLogoUrl(logo: string) {
+  if (!logo.trim()) return true;
+
+  try {
+    const normalizedUrl = decodeURIComponent(logo).toLowerCase();
+    return MISSING_LOGO_MARKERS.some((marker) => normalizedUrl.includes(marker));
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyImgurUnavailableImage(logo: string, width: number, height: number) {
+  if (!width || !height) return true;
+
+  try {
+    const { hostname } = new URL(logo);
+    const isImgurImage = hostname.toLowerCase().includes('imgur.com');
+    const isSmallWidePlaceholder = width <= 220 && height <= 130 && width / height > 1.45;
+
+    return isImgurImage && isSmallWidePlaceholder;
+  } catch {
+    return false;
+  }
+}
+
+function ChannelLogo({
+  logo,
+  name,
+  variant,
+}: {
+  logo: string;
+  name: string;
+  variant: 'list' | 'preview';
+}) {
+  return (
+    <ChannelLogoContent
+      key={`${variant}-${logo}-${name}`}
+      logo={logo}
+      name={name}
+      variant={variant}
+    />
+  );
+}
+
+function ChannelLogoContent({
+  logo,
+  name,
+  variant,
+}: {
+  logo: string;
+  name: string;
+  variant: 'list' | 'preview';
+}) {
+  const [fallback, setFallback] = useState(() => isLikelyMissingLogoUrl(logo));
+
+  const className = variant === 'preview' ? styles.previewLogo : styles.channelLogo;
+
+  return (
+    <span className={`${className} ${fallback ? styles.logoFallback : ''}`} aria-label={name}>
+      {!fallback ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logo}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setFallback(true)}
+          onLoad={(event) => {
+            const image = event.currentTarget;
+
+            if (isLikelyImgurUnavailableImage(logo, image.naturalWidth, image.naturalHeight)) {
+              setFallback(true);
+            }
+          }}
+        />
+      ) : (
+        <span className={styles.logoFallbackText}>{name}</span>
+      )}
+    </span>
+  );
 }
 
 function HeaderButton({
@@ -196,12 +306,7 @@ function ChannelListItem({
       onClick={() => onPress(channel)}
     >
       <span className={styles.channelIndex}>{index + 1}</span>
-      <span
-        className={styles.channelLogo}
-        style={{ backgroundImage: channel.logo ? `url("${channel.logo}")` : undefined }}
-      >
-        {!channel.logo && 'N'}
-      </span>
+      <ChannelLogo logo={channel.logo} name={channel.name} variant="list" />
       <span className={styles.channelText}>
         <span className={styles.channelName}>
           {channel.name}
@@ -217,6 +322,7 @@ function PreviewPanel({
   channel,
   prepared,
   favorite,
+  canFocusEpg,
   onPreviewPress,
   onFavoriteToggle,
   labels,
@@ -224,6 +330,7 @@ function PreviewPanel({
   channel: ChannelListViewChannel | null;
   prepared: boolean;
   favorite: boolean;
+  canFocusEpg?: boolean;
   onPreviewPress: () => void;
   onFavoriteToggle: (channel: ChannelListViewChannel) => void;
   labels: {
@@ -252,6 +359,11 @@ function PreviewPanel({
         return false;
       }
 
+      if (direction === 'down' && canFocusEpg) {
+        setFocus(getEpgFocusKey(0));
+        return false;
+      }
+
       return true;
     },
   });
@@ -266,11 +378,8 @@ function PreviewPanel({
     >
       {channel ? (
         <>
-          <div
-            className={styles.previewArt}
-            style={{ backgroundImage: channel.logo ? `url("${channel.logo}")` : undefined }}
-          >
-            {!channel.logo && <span>N</span>}
+          <div className={styles.previewArt}>
+            <ChannelLogo logo={channel.logo} name={channel.name} variant="preview" />
           </div>
           <div className={styles.previewOverlay}>
             <span className={styles.previewBadge}>{prepared ? labels.selected : labels.lightweightPreview}</span>
@@ -295,6 +404,185 @@ function PreviewPanel({
   );
 }
 
+function EpgProgramRow({
+  program,
+  index,
+  isNext,
+  selectedChannelId,
+  labels,
+}: {
+  program: EpgProgram;
+  index: number;
+  isNext: boolean;
+  selectedChannelId?: string;
+  labels: {
+    epgNow: string;
+    epgNext: string;
+  };
+}) {
+  const { ref, focused } = useFocusable({
+    focusKey: getEpgFocusKey(index),
+    onEnterPress: () => undefined,
+    onFocus: () => {
+      if (ref.current) {
+        ref.current.scrollIntoView({
+          behavior: 'auto',
+          block: 'nearest',
+        });
+      }
+    },
+    onArrowPress: (direction) => {
+      if (direction === 'left') {
+        setFocus(selectedChannelId ? getChannelFocusKey(selectedChannelId) : 'content-preview');
+        return false;
+      }
+
+      if (direction === 'up' && index === 0) {
+        setFocus('content-preview');
+        return false;
+      }
+
+      return true;
+    },
+  });
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={`${styles.epgRow} ${program.isCurrent ? styles.epgRowCurrent : ''} ${focused ? styles.focused : ''}`}
+      aria-label={`${program.startTimeLabel} - ${program.endTimeLabel} ${program.title}`}
+    >
+      <span className={styles.epgStatus}>
+        {program.isCurrent ? labels.epgNow : isNext ? labels.epgNext : ''}
+      </span>
+      <span className={styles.epgTime}>{program.startTimeLabel} - {program.endTimeLabel}</span>
+      <span className={styles.epgText}>
+        <strong>{program.title}</strong>
+        {program.description && <small>{program.description}</small>}
+      </span>
+    </button>
+  );
+}
+
+function EpgInfoCard({
+  channel,
+  currentProgram,
+  isLoading,
+  hasEpg,
+  labels,
+}: {
+  channel: ChannelListViewChannel | null;
+  currentProgram: EpgProgram | null;
+  isLoading: boolean;
+  hasEpg: boolean;
+  labels: {
+    liveBadge: string;
+    epgCurrentProgram: string;
+    epgLoading: string;
+    epgUnavailable: string;
+    epgNoChannel: string;
+  };
+}) {
+  return (
+    <section className={styles.previewInfoCard} aria-live="polite">
+      <span className={styles.liveBadge}>{labels.liveBadge}</span>
+      <h2>{channel?.name || labels.epgNoChannel}</h2>
+
+      {channel ? (
+        <div className={styles.currentProgram}>
+          <span>{labels.epgCurrentProgram}</span>
+          {isLoading ? (
+            <p>{labels.epgLoading}</p>
+          ) : hasEpg && currentProgram ? (
+            <>
+              <strong>{currentProgram.title}</strong>
+              <small>{currentProgram.startTimeLabel} - {currentProgram.endTimeLabel}</small>
+              {currentProgram.progressPercent !== undefined && (
+                <div className={styles.epgProgress} aria-hidden="true">
+                  <span style={{ width: `${currentProgram.progressPercent}%` }} />
+                </div>
+              )}
+            </>
+          ) : (
+            <p>{labels.epgUnavailable}</p>
+          )}
+        </div>
+      ) : (
+        <p className={styles.noEpgText}>{labels.epgNoChannel}</p>
+      )}
+    </section>
+  );
+}
+
+function EpgProgramList({
+  programs,
+  isLoading,
+  hasChannel,
+  hasEpg,
+  selectedChannelId,
+  labels,
+}: {
+  programs: EpgProgram[];
+  isLoading: boolean;
+  hasChannel: boolean;
+  hasEpg: boolean;
+  selectedChannelId?: string;
+  labels: {
+    epgTitle: string;
+    epgSchedule: string;
+    epgNow: string;
+    epgNext: string;
+    epgLoading: string;
+    epgUnavailable: string;
+    epgNoChannel: string;
+  };
+}) {
+  const visiblePrograms = programs;
+  const nextProgramIndex = visiblePrograms.findIndex((program) => !program.isCurrent);
+
+  return (
+    <section className={styles.epgPanel} aria-live="polite">
+      <div className={styles.epgHeader}>
+        <span>{labels.epgTitle}</span>
+        <strong>{labels.epgSchedule}</strong>
+      </div>
+
+      {isLoading ? (
+        <div className={styles.epgSkeletonList}>
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className={styles.epgSkeletonRow} />
+          ))}
+        </div>
+      ) : !hasChannel ? (
+        <div className={styles.epgEmpty}>{labels.epgNoChannel}</div>
+      ) : !hasEpg ? (
+        <div className={styles.epgEmpty}>{labels.epgUnavailable}</div>
+      ) : (
+        <div className={styles.epgList}>
+          {visiblePrograms.map((program, index) => {
+            const isNext = !program.isCurrent && index === nextProgramIndex;
+
+            return (
+              <EpgProgramRow
+                key={program.id || `${program.startTimeLabel}-${program.title}-${index}`}
+                program={program}
+                index={index}
+                isNext={isNext}
+                selectedChannelId={selectedChannelId}
+                labels={{
+                  epgNow: labels.epgNow,
+                  epgNext: labels.epgNext,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function ChannelListView({
   mediaTitle,
   categoryName,
@@ -305,6 +593,8 @@ export default function ChannelListView({
   isLoading,
   favoriteIds,
   favoriteFeedback,
+  epgCredentials,
+  showEpg = false,
   emptyMessage,
   onBack,
   onChannelFocus,
@@ -318,6 +608,13 @@ export default function ChannelListView({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResultLimit, setSearchResultLimit] = useState(SEARCH_RESULT_BATCH_SIZE);
+  const [asyncSearchResult, setAsyncSearchResult] = useState<SearchResultState>({
+    query: '',
+    limit: SEARCH_RESULT_BATCH_SIZE,
+    total: 0,
+    channels: [],
+    isSearching: false,
+  });
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debouncedSearchQuery = useDebouncedValue(searchQuery, SEARCH_DEBOUNCE_MS);
   const { ref, focusKey } = useFocusable({
@@ -325,11 +622,92 @@ export default function ChannelListView({
     trackChildren: true,
   });
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  const {
+    programs: epgPrograms,
+    currentProgram,
+    isLoading: isEpgLoading,
+    hasEpg,
+  } = useChannelEpg({
+    credentials: epgCredentials,
+    streamId: selectedChannel?.id,
+    enabled: showEpg && Boolean(selectedChannel),
+    limit: 24,
+  });
   const hasSearch = hasSearchQuery(debouncedSearchQuery);
   const searchIndex = useMemo(
     () => createSearchIndex(searchChannels, (channel) => channel.name),
     [searchChannels]
   );
+  useEffect(() => {
+    if (!hasSearch) return undefined;
+
+    let cancelled = false;
+    let scanTimeout: number | null = null;
+    const query = debouncedSearchQuery;
+    const limit = searchResultLimit;
+    const matchesSearch = createIndexedSearchMatcher<ChannelListViewChannel>(debouncedSearchQuery);
+    const matchedChannels: ChannelListViewChannel[] = [];
+    let total = 0;
+    let cursor = 0;
+
+    const startTimeout = window.setTimeout(() => {
+      if (cancelled) return;
+
+      setAsyncSearchResult({
+        query,
+        limit,
+        total: 0,
+        channels: [],
+        isSearching: true,
+      });
+
+      const scanChunk = () => {
+        const chunkEnd = Math.min(cursor + SEARCH_SCAN_CHUNK_SIZE, searchIndex.length);
+
+        for (; cursor < chunkEnd; cursor += 1) {
+          const entry = searchIndex[cursor];
+          if (!matchesSearch(entry)) continue;
+
+          total += 1;
+
+          if (matchedChannels.length < limit) {
+            matchedChannels.push(entry.item);
+          }
+        }
+
+        if (cancelled) return;
+
+        if (cursor < searchIndex.length) {
+          scanTimeout = window.setTimeout(scanChunk, 0);
+          return;
+        }
+
+        setAsyncSearchResult({
+          query,
+          limit,
+          total,
+          channels: matchedChannels,
+          isSearching: false,
+        });
+      };
+
+      scanTimeout = window.setTimeout(scanChunk, 0);
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(startTimeout);
+
+      if (scanTimeout !== null) {
+        window.clearTimeout(scanTimeout);
+      }
+    };
+  }, [debouncedSearchQuery, hasSearch, searchIndex, searchResultLimit]);
+
+  const isSearchResultFresh =
+    asyncSearchResult.query === debouncedSearchQuery &&
+    asyncSearchResult.limit === searchResultLimit;
+  const isSearchRunning = hasSearch && (!isSearchResultFresh || asyncSearchResult.isSearching);
   const searchResult = useMemo(() => {
     if (!hasSearch) {
       return {
@@ -338,25 +716,18 @@ export default function ChannelListView({
       };
     }
 
-    const matchesSearch = createIndexedSearchMatcher<ChannelListViewChannel>(debouncedSearchQuery);
-    const matchedChannels: ChannelListViewChannel[] = [];
-    let total = 0;
-
-    for (const entry of searchIndex) {
-      if (!matchesSearch(entry)) continue;
-
-      total += 1;
-
-      if (matchedChannels.length < searchResultLimit) {
-        matchedChannels.push(entry.item);
-      }
+    if (!isSearchResultFresh) {
+      return {
+        total: 0,
+        channels: [],
+      };
     }
 
     return {
-      total,
-      channels: matchedChannels,
+      total: asyncSearchResult.total,
+      channels: asyncSearchResult.channels,
     };
-  }, [channels, debouncedSearchQuery, hasSearch, searchIndex, searchResultLimit]);
+  }, [asyncSearchResult.channels, asyncSearchResult.total, channels, hasSearch, isSearchResultFresh]);
   const visibleChannels = searchResult.channels;
 
   const focusFirstChannel = useCallback(() => {
@@ -404,9 +775,8 @@ export default function ChannelListView({
 
   const prepared = Boolean(selectedChannel && preparedChannelId === selectedChannel.id);
   const selectedChannelFavorite = Boolean(selectedChannel && favoriteIdSet.has(selectedChannel.id));
-  const hasMoreChannels = channels.length < searchChannels.length;
   const totalChannelCount = Math.max(channels.length, searchChannels.length);
-  const hasMoreSearchResults = hasSearch && visibleChannels.length < searchResult.total;
+  const hasMoreSearchResults = hasSearch && !isSearchRunning && visibleChannels.length < searchResult.total;
 
   return (
     <FocusContext.Provider value={focusKey}>
@@ -474,7 +844,7 @@ export default function ChannelListView({
                   ? `${visibleChannels.length} / ${searchResult.total}`
                   : `${channels.length} / ${totalChannelCount}`}
               </span>
-              <strong>{hasSearch ? copy.content.searchResult : hasMoreChannels ? copy.content.blockLoading : copy.content.channels}</strong>
+              <strong>{hasSearch ? copy.content.searchResult : copy.content.channels}</strong>
             </div>
 
             {isLoading ? (
@@ -521,21 +891,75 @@ export default function ChannelListView({
             )}
           </div>
 
-          <aside className={styles.previewColumn}>
-            <PreviewPanel
-              channel={selectedChannel}
-              prepared={prepared}
-              favorite={selectedChannelFavorite}
-              onPreviewPress={onPreviewPress}
-              onFavoriteToggle={onFavoriteToggle}
-              labels={{
-                selected: copy.content.selected,
-                lightweightPreview: copy.content.lightweightPreview,
-                fullscreenHint: copy.content.fullscreenHint,
-                selectChannel: copy.content.selectChannel,
-                selectChannelDescription: copy.content.selectChannelDescription,
-              }}
-            />
+          <aside className={`${styles.previewColumn} ${showEpg ? styles.previewColumnWithEpg : ''}`}>
+            {showEpg ? (
+              <>
+                <div className={styles.previewTop}>
+                  <PreviewPanel
+                    channel={selectedChannel}
+                    prepared={prepared}
+                    favorite={selectedChannelFavorite}
+                    canFocusEpg={hasEpg}
+                    onPreviewPress={onPreviewPress}
+                    onFavoriteToggle={onFavoriteToggle}
+                    labels={{
+                      selected: copy.content.selected,
+                      lightweightPreview: copy.content.lightweightPreview,
+                      fullscreenHint: copy.content.fullscreenHint,
+                      selectChannel: copy.content.selectChannel,
+                      selectChannelDescription: copy.content.selectChannelDescription,
+                    }}
+                  />
+
+                  <EpgInfoCard
+                    channel={selectedChannel}
+                    currentProgram={currentProgram}
+                    isLoading={isEpgLoading}
+                    hasEpg={hasEpg}
+                    labels={{
+                      liveBadge: copy.content.liveBadge,
+                      epgCurrentProgram: copy.content.epgCurrentProgram,
+                      epgLoading: copy.content.epgLoading,
+                      epgUnavailable: copy.content.epgUnavailable,
+                      epgNoChannel: copy.content.epgNoChannel,
+                    }}
+                  />
+                </div>
+
+                <EpgProgramList
+                  programs={epgPrograms}
+                  isLoading={isEpgLoading}
+                  hasChannel={Boolean(selectedChannel)}
+                  hasEpg={hasEpg}
+                  selectedChannelId={selectedChannel?.id}
+                  labels={{
+                    epgTitle: copy.content.epgTitle,
+                    epgSchedule: copy.content.epgSchedule,
+                    epgNow: copy.content.epgNow,
+                    epgNext: copy.content.epgNext,
+                    epgLoading: copy.content.epgLoading,
+                    epgUnavailable: copy.content.epgUnavailable,
+                    epgNoChannel: copy.content.epgNoChannel,
+                  }}
+                />
+              </>
+            ) : (
+              <PreviewPanel
+                channel={selectedChannel}
+                prepared={prepared}
+                favorite={selectedChannelFavorite}
+                canFocusEpg={false}
+                onPreviewPress={onPreviewPress}
+                onFavoriteToggle={onFavoriteToggle}
+                labels={{
+                  selected: copy.content.selected,
+                  lightweightPreview: copy.content.lightweightPreview,
+                  fullscreenHint: copy.content.fullscreenHint,
+                  selectChannel: copy.content.selectChannel,
+                  selectChannelDescription: copy.content.selectChannelDescription,
+                }}
+              />
+            )}
 
             {favoriteFeedback && (
               <div className={styles.favoriteFeedback}>{favoriteFeedback}</div>

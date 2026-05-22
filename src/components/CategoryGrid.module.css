@@ -118,6 +118,7 @@
 }
 
 .card {
+  scroll-margin: 1rem;
   min-height: 108px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.09);

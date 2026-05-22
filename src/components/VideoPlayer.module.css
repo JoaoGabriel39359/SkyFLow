@@ -150,6 +150,24 @@
   object-fit: contain;
 }
 
+.errorMessage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 14;
+  width: min(620px, calc(100vw - 4rem));
+  transform: translate(-50%, -50%);
+  border-radius: 8px;
+  border: 1px solid rgba(248, 113, 113, 0.36);
+  background: rgba(15, 8, 14, 0.92);
+  color: #fecaca;
+  padding: 1.15rem 1.35rem;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 820;
+  line-height: 1.45;
+}
+
 .bottomControls {
   position: absolute;
   left: 50%;

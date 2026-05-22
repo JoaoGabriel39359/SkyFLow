@@ -18,6 +18,7 @@ import {
   setFocus,
 } from '@noriginmedia/norigin-spatial-navigation';
 import { appCopy, type AppLanguage } from '@/lib/i18n';
+import type { PlayerMode } from '@/lib/playerSettings';
 import styles from './VideoPlayer.module.css';
 
 interface VideoPlayerProps {
@@ -30,6 +31,7 @@ interface VideoPlayerProps {
   title: string;
   controlsHideDelayMs?: number;
   autoPlayNext?: boolean;
+  playerMode?: PlayerMode;
   language: AppLanguage;
 }
 
@@ -88,6 +90,7 @@ export default function VideoPlayer({
   title,
   controlsHideDelayMs = 3500,
   autoPlayNext = false,
+  playerMode = 'auto',
   language,
 }: VideoPlayerProps) {
   const copy = appCopy[language].player;
@@ -96,6 +99,7 @@ export default function VideoPlayer({
   const [isPaused, setIsPaused] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [playbackError, setPlaybackError] = useState('');
   const { ref, focusKey } = useFocusable({
     focusKey: 'video-player',
     trackChildren: true,
@@ -150,31 +154,111 @@ export default function VideoPlayer({
 
   useEffect(() => {
     let hls: Hls | null = null;
+    let triedHls = false;
+    let triedNative = false;
+    const video = videoRef.current;
+    if (!video) return undefined;
 
-    if (videoRef.current) {
-      const video = videoRef.current;
-      const isM3u8 = url.includes('.m3u8') || url.includes('.ts');
+    const nativeHlsSupport = Boolean(
+      video.canPlayType('application/vnd.apple.mpegurl') ||
+      video.canPlayType('application/x-mpegURL')
+    );
+    const normalizedUrl = url.toLowerCase();
+    const isHlsStream = normalizedUrl.includes('.m3u8') || normalizedUrl.includes('m3u8');
+    const isDirectVideoFile = /\.(mp4|webm|ogg|ogv|mov)(\?|#|$)/i.test(url);
 
-      if (isM3u8 && Hls.isSupported()) {
-        hls = new Hls();
-        hls.loadSource(url);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(e => console.log("Auto-play blocked", e));
-        });
-      } else {
-        // Nativo para mp4, webm ou fallback em dispositivos Apple (que rodam m3u8 nativamente)
-        video.src = url;
-        video.play().catch(e => console.log("Auto-play blocked", e));
+    const showPlaybackError = () => {
+      setPlaybackError(copy.playbackError);
+    };
+
+    const playVideo = () => {
+      video.play().catch((error) => {
+        console.log('Auto-play blocked or delayed', error);
+      });
+    };
+
+    const destroyHls = () => {
+      if (hls) {
+        hls.destroy();
+        hls = null;
       }
+    };
+
+    const startNativePlayback = () => {
+      triedNative = true;
+      destroyHls();
+      video.src = url;
+      video.load();
+      playVideo();
+    };
+
+    const startHlsPlayback = () => {
+      if (!Hls.isSupported()) {
+        if (playerMode === 'auto' && !triedNative) {
+          startNativePlayback();
+          return;
+        }
+
+        showPlaybackError();
+        return;
+      }
+
+      triedHls = true;
+      destroyHls();
+      hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+      });
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, playVideo);
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          if (playerMode === 'auto' && !triedNative) {
+            startNativePlayback();
+            return;
+          }
+
+          showPlaybackError();
+        }
+      });
+    };
+
+    const handleVideoError = () => {
+      if (playerMode === 'auto' && !triedHls && !isDirectVideoFile) {
+        startHlsPlayback();
+        return;
+      }
+
+      showPlaybackError();
+    };
+
+    setPlaybackError('');
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    video.addEventListener('error', handleVideoError);
+
+    if (playerMode === 'native') {
+      startNativePlayback();
+    } else if (playerMode === 'hls') {
+      startHlsPlayback();
+    } else if (nativeHlsSupport || isDirectVideoFile) {
+      startNativePlayback();
+    } else if (isHlsStream || Hls.isSupported()) {
+      startHlsPlayback();
+    } else {
+      startNativePlayback();
     }
 
     return () => {
-      if (hls) {
-        hls.destroy();
-      }
+      video.removeEventListener('error', handleVideoError);
+      destroyHls();
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
     };
-  }, [url]);
+  }, [copy.playbackError, playerMode, url]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -315,6 +399,12 @@ export default function VideoPlayer({
           onPause={() => setIsPaused(true)}
           onVolumeChange={(event) => setIsMuted(event.currentTarget.muted)}
         />
+
+        {playbackError && (
+          <div className={styles.errorMessage} role="alert">
+            {playbackError}
+          </div>
+        )}
 
         <div className={styles.bottomControls}>
           <PlayerButton

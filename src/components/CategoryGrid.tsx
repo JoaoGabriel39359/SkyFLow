@@ -31,6 +31,31 @@ type CategoryGridProps = {
 const createFocusKeyPart = (value: string | number) =>
   String(value).replace(/[^a-zA-Z0-9_-]/g, '-');
 
+const getCategoryFocusKey = (categoryId: string | number) =>
+  `category-card-${createFocusKeyPart(categoryId)}`;
+
+const getGridColumnCount = (element: HTMLElement | null) => {
+  const grid = element?.parentElement;
+  if (!grid || typeof window === 'undefined') return 1;
+
+  const columns = window
+    .getComputedStyle(grid)
+    .gridTemplateColumns
+    .split(' ')
+    .filter(Boolean);
+
+  return Math.max(1, columns.length);
+};
+
+const scrollToGridTop = () => {
+  if (typeof window === 'undefined') return;
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'auto',
+  });
+};
+
 function BackButton({ onBack, label }: { onBack: () => void; label: string }) {
   const { ref, focused } = useFocusable({
     focusKey: 'category-grid-back',
@@ -88,18 +113,63 @@ function SearchButton({ onOpen, label }: { onOpen: () => void; label: string }) 
 
 function CategoryCard({
   category,
+  categories,
+  index,
   onSelect,
   labels,
 }: {
   category: MediaCategory;
+  categories: MediaCategory[];
+  index: number;
   onSelect: (category: MediaCategory) => void;
   labels: { allBadge: string; favoritesBadge: string };
 }) {
-  const focusKey = `category-card-${createFocusKeyPart(category.id)}`;
+  const focusKey = getCategoryFocusKey(category.id);
   const Icon = category.isFavorites ? Star : Folder;
   const { ref, focused } = useFocusable({
     focusKey,
     onEnterPress: () => onSelect(category),
+    onFocus: () => {
+      const columnCount = getGridColumnCount(ref.current);
+
+      if (index < columnCount) {
+        scrollToGridTop();
+        return;
+      }
+
+      if (ref.current) {
+        ref.current.scrollIntoView({
+          behavior: 'auto',
+          block: 'nearest',
+          inline: 'nearest',
+        });
+      }
+    },
+    onArrowPress: (direction) => {
+      if (direction !== 'down' && direction !== 'up') {
+        return true;
+      }
+
+      const columnCount = getGridColumnCount(ref.current);
+      const nextIndex = direction === 'down' ? index + columnCount : index - columnCount;
+
+      if (nextIndex >= 0 && nextIndex < categories.length) {
+        if (nextIndex < columnCount) {
+          scrollToGridTop();
+        }
+
+        setFocus(getCategoryFocusKey(categories[nextIndex].id));
+        return false;
+      }
+
+      if (direction === 'up') {
+        scrollToGridTop();
+        setFocus(index % columnCount === columnCount - 1 ? 'category-grid-search' : 'category-grid-back');
+        return false;
+      }
+
+      return false;
+    },
   });
 
   return (
@@ -147,7 +217,7 @@ export default function CategoryGrid({
   const focusFirstCategory = useCallback(() => {
     setFocus(
       visibleCategories.length > 0
-        ? `category-card-${createFocusKeyPart(visibleCategories[0].id)}`
+        ? getCategoryFocusKey(visibleCategories[0].id)
         : 'category-grid-search'
     );
   }, [visibleCategories]);
@@ -219,10 +289,12 @@ export default function CategoryGrid({
         ) : (
           <div className={styles.grid}>
             {visibleCategories.length > 0 ? (
-              visibleCategories.map((category) => (
+              visibleCategories.map((category, index) => (
                 <CategoryCard
                   key={category.id}
                   category={category}
+                  categories={visibleCategories}
+                  index={index}
                   onSelect={onSelect}
                   labels={{
                     allBadge: copy.categoryGrid.allBadge,

@@ -28,9 +28,37 @@ type ActionParams = {
   type: 'live' | 'vod' | 'series';
 };
 
-const FALLBACK_LOGO = 'https://images.unsplash.com/photo-1593784991095-a205069470b6?w=800&auto=format&fit=crop&q=60';
 const CONTENT_BATCH_SIZE = 60;
+const CATEGORY_CONTENT_CACHE_LIMIT = 6;
 type MediaSection = Exclude<MainMenuSection, 'settings'>;
+
+function getCachedCategoryContent(
+  cache: Map<string, ChannelListViewChannel[]>,
+  key: string
+) {
+  const cachedChannels = cache.get(key);
+
+  if (!cachedChannels) return null;
+
+  cache.delete(key);
+  cache.set(key, cachedChannels);
+  return cachedChannels;
+}
+
+function setCachedCategoryContent(
+  cache: Map<string, ChannelListViewChannel[]>,
+  key: string,
+  channels: ChannelListViewChannel[]
+) {
+  cache.delete(key);
+  cache.set(key, channels);
+
+  while (cache.size > CATEGORY_CONTENT_CACHE_LIMIT) {
+    const oldestKey = cache.keys().next().value;
+    if (!oldestKey) return;
+    cache.delete(oldestKey);
+  }
+}
 
 const getActionParams = (tab: string): ActionParams => {
   if (tab.includes('movies')) {
@@ -424,7 +452,7 @@ export default function Home() {
         const channels: ChannelListViewChannel[] = getFavorites(currentMediaKey).map((favorite) => ({
           id: favorite.id,
           name: favorite.name,
-          logo: favorite.logo || FALLBACK_LOGO,
+          logo: favorite.logo || '',
           url: favorite.url,
         }));
         const firstChannel = channels[0] ?? null;
@@ -436,7 +464,7 @@ export default function Home() {
         return;
       }
 
-      const cachedChannels = categoryContentCache.current.get(categoryCacheKey);
+      const cachedChannels = getCachedCategoryContent(categoryContentCache.current, categoryCacheKey);
 
       if (cachedChannels) {
         const firstChannel = cachedChannels[0] ?? null;
@@ -458,7 +486,7 @@ export default function Home() {
         ? streams.map((stream: any) => {
           const streamId = stream.stream_id || stream.series_id;
           const name = stream.name || stream.title || 'Sem Nome';
-          const logo = stream.stream_icon || stream.cover || FALLBACK_LOGO;
+          const logo = stream.stream_icon || stream.cover || '';
           const extension = stream.container_extension || 'm3u8';
 
           return {
@@ -472,7 +500,7 @@ export default function Home() {
 
       const firstChannel = channels[0] ?? null;
       firstChannelFocusKey = firstChannel ? getChannelFocusKey(firstChannel.id) : 'content-back';
-      categoryContentCache.current.set(categoryCacheKey, channels);
+      setCachedCategoryContent(categoryContentCache.current, categoryCacheKey, channels);
       setPreviewChannel(firstChannel);
       setAllCategoryChannels(channels);
       setLoadedCategories([{ id: category.id, name: category.name, channels: channels.slice(0, CONTENT_BATCH_SIZE) }]);
@@ -698,6 +726,8 @@ export default function Home() {
           isLoading={isLoadingMore}
           favoriteIds={currentFavoriteIds}
           favoriteFeedback={favoriteFeedback}
+          epgCredentials={currentMediaKey === 'live' ? credentials : null}
+          showEpg={currentMediaKey === 'live'}
           emptyMessage={
             selectedCategory.isFavorites
               ? copy.content.emptyFavorites
@@ -731,6 +761,7 @@ export default function Home() {
           hasNext={selectedChannelIndex >= 0 && selectedChannelIndex < playableChannels.length - 1}
           controlsHideDelayMs={appSettings.controlsHideDelayMs}
           autoPlayNext={appSettings.autoPlayNext}
+          playerMode={appSettings.playerModeByType[currentMediaKey]}
           language={appSettings.language}
         />
       )}

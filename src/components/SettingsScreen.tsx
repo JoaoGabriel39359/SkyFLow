@@ -17,6 +17,12 @@ import {
   useFocusable,
 } from '@noriginmedia/norigin-spatial-navigation';
 import { appCopy, languageNames, languageOrder, type AppLanguage } from '@/lib/i18n';
+import {
+  playerModeOrder,
+  type PlayerContentType,
+  type PlayerMode,
+  type PlayerModeByType,
+} from '@/lib/playerSettings';
 import type { AppSettings } from '@/lib/settings';
 import styles from './SettingsScreen.module.css';
 
@@ -94,6 +100,8 @@ const settingsSectionIcons: Array<Pick<SectionCardConfig, 'id' | 'icon'>> = [
 
 const getSectionFocusKey = (section: SettingsSection) => `settings-section-${section}`;
 const getLanguageFocusKey = (language: AppLanguage) => `settings-language-${language}`;
+const getPlayerModeFocusKey = (contentType: PlayerContentType, mode: PlayerMode) =>
+  `settings-player-${contentType}-${mode}`;
 
 function valueClassName(tone: 'default' | 'danger' | 'success') {
   return [
@@ -379,6 +387,136 @@ function LanguageSelect({
   );
 }
 
+function PlayerModeOptionButton({
+  contentType,
+  mode,
+  currentMode,
+  selectedLabel,
+  previousFocusKey,
+  nextFocusKey,
+  labels,
+  descriptions,
+  onSelect,
+}: {
+  contentType: PlayerContentType;
+  mode: PlayerMode;
+  currentMode: PlayerMode;
+  selectedLabel: string;
+  previousFocusKey: string;
+  nextFocusKey: string;
+  labels: Record<PlayerMode, string>;
+  descriptions: Record<PlayerMode, string>;
+  onSelect: (contentType: PlayerContentType, mode: PlayerMode) => void;
+}) {
+  const modeIndex = playerModeOrder.indexOf(mode);
+  const isSelected = mode === currentMode;
+  const { ref, focused } = useFocusable({
+    focusKey: getPlayerModeFocusKey(contentType, mode),
+    onEnterPress: () => onSelect(contentType, mode),
+    onArrowPress: (direction: string) => {
+      if (direction === 'left' && modeIndex > 0) {
+        const previousMode = playerModeOrder[modeIndex - 1];
+        if (previousMode) {
+          setFocus(getPlayerModeFocusKey(contentType, previousMode));
+        }
+        return false;
+      }
+
+      if (direction === 'right' && modeIndex < playerModeOrder.length - 1) {
+        const nextMode = playerModeOrder[modeIndex + 1];
+        if (nextMode) {
+          setFocus(getPlayerModeFocusKey(contentType, nextMode));
+        }
+        return false;
+      }
+
+      if (direction === 'up') {
+        setFocus(previousFocusKey);
+        return false;
+      }
+
+      if (direction === 'down') {
+        setFocus(nextFocusKey);
+        return false;
+      }
+
+      return true;
+    },
+  });
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={[
+        styles.modeOption,
+        isSelected ? styles.modeOptionSelected : '',
+        focused ? styles.focused : '',
+      ].filter(Boolean).join(' ')}
+      onClick={() => onSelect(contentType, mode)}
+    >
+      <span>
+        <strong>{labels[mode]}</strong>
+        <small>{descriptions[mode]}</small>
+      </span>
+      {isSelected && <em>{selectedLabel}</em>}
+    </button>
+  );
+}
+
+function PlayerModeSelect({
+  contentType,
+  title,
+  description,
+  currentMode,
+  selectedLabel,
+  previousFocusKey,
+  nextFocusKey,
+  labels,
+  descriptions,
+  onSelect,
+}: {
+  contentType: PlayerContentType;
+  title: string;
+  description: string;
+  currentMode: PlayerMode;
+  selectedLabel: string;
+  previousFocusKey: string;
+  nextFocusKey: string;
+  labels: Record<PlayerMode, string>;
+  descriptions: Record<PlayerMode, string>;
+  onSelect: (contentType: PlayerContentType, mode: PlayerMode) => void;
+}) {
+  return (
+    <div className={styles.modeSelect}>
+      <div className={styles.modeSelectHeader}>
+        <span className={styles.optionText}>
+          <strong>{title}</strong>
+          <span>{description}</span>
+        </span>
+        <span className={styles.value}>{labels[currentMode]}</span>
+      </div>
+
+      <div className={styles.modeOptions}>
+        {playerModeOrder.map((mode) => (
+          <PlayerModeOptionButton
+            key={mode}
+            contentType={contentType}
+            mode={mode}
+            currentMode={currentMode}
+            selectedLabel={selectedLabel}
+            previousFocusKey={previousFocusKey}
+            nextFocusKey={nextFocusKey}
+            labels={labels}
+            descriptions={descriptions}
+            onSelect={onSelect}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsScreen({
   settings,
   deviceId,
@@ -528,6 +666,49 @@ export default function SettingsScreen({
     );
   }, [copy.autoNextOff, copy.autoNextOn, settings, updateSettings]);
 
+  const playerModeLabels = useMemo<Record<PlayerMode, string>>(() => ({
+    auto: copy.playerAuto,
+    native: copy.playerNative,
+    hls: copy.playerHls,
+  }), [copy.playerAuto, copy.playerHls, copy.playerNative]);
+
+  const playerModeDescriptions = useMemo<Record<PlayerMode, string>>(() => ({
+    auto: copy.playerAutoDescription,
+    native: copy.playerNativeDescription,
+    hls: copy.playerHlsDescription,
+  }), [copy.playerAutoDescription, copy.playerHlsDescription, copy.playerNativeDescription]);
+
+  const playerContentTitles = useMemo<Record<PlayerContentType, string>>(() => ({
+    live: copy.playerLive,
+    movies: copy.playerMovies,
+    series: copy.playerSeries,
+  }), [copy.playerLive, copy.playerMovies, copy.playerSeries]);
+
+  const getSelectedPlayerModeFocusKey = useCallback((
+    contentType: PlayerContentType,
+    modes: PlayerModeByType = settings.playerModeByType
+  ) => getPlayerModeFocusKey(contentType, modes[contentType]), [settings.playerModeByType]);
+
+  const selectPlayerMode = useCallback((contentType: PlayerContentType, mode: PlayerMode) => {
+    window.setTimeout(() => setFocus(getPlayerModeFocusKey(contentType, mode)), 0);
+
+    if (settings.playerModeByType[contentType] === mode) {
+      setFeedback(`${playerContentTitles[contentType]}: ${playerModeLabels[mode]}.`);
+      return;
+    }
+
+    updateSettings(
+      {
+        ...settings,
+        playerModeByType: {
+          ...settings.playerModeByType,
+          [contentType]: mode,
+        },
+      },
+      `${copy.playerModeFeedback} ${playerContentTitles[contentType]}: ${playerModeLabels[mode]}.`
+    );
+  }, [copy.playerModeFeedback, playerContentTitles, playerModeLabels, settings, updateSettings]);
+
   const handleClearCatalogCache = useCallback(() => {
     onClearCatalogCache();
     setFeedback(copy.clearCacheFeedback);
@@ -577,12 +758,48 @@ export default function SettingsScreen({
     if (activeSectionConfig.id === 'player') {
       return (
         <>
+          <PlayerModeSelect
+            contentType="live"
+            title={copy.playerLive}
+            description={`${copy.playerType}: ${copy.playerTypeDescription}`}
+            currentMode={settings.playerModeByType.live}
+            selectedLabel={copy.current}
+            previousFocusKey="settings-detail-back"
+            nextFocusKey={getSelectedPlayerModeFocusKey('movies')}
+            labels={playerModeLabels}
+            descriptions={playerModeDescriptions}
+            onSelect={selectPlayerMode}
+          />
+          <PlayerModeSelect
+            contentType="movies"
+            title={copy.playerMovies}
+            description={`${copy.playerType}: ${copy.playerTypeDescription}`}
+            currentMode={settings.playerModeByType.movies}
+            selectedLabel={copy.current}
+            previousFocusKey={getSelectedPlayerModeFocusKey('live')}
+            nextFocusKey={getSelectedPlayerModeFocusKey('series')}
+            labels={playerModeLabels}
+            descriptions={playerModeDescriptions}
+            onSelect={selectPlayerMode}
+          />
+          <PlayerModeSelect
+            contentType="series"
+            title={copy.playerSeries}
+            description={`${copy.playerType}: ${copy.playerTypeDescription}`}
+            currentMode={settings.playerModeByType.series}
+            selectedLabel={copy.current}
+            previousFocusKey={getSelectedPlayerModeFocusKey('movies')}
+            nextFocusKey="settings-controls-timeout"
+            labels={playerModeLabels}
+            descriptions={playerModeDescriptions}
+            onSelect={selectPlayerMode}
+          />
           <ActionRow
             focusKey="settings-controls-timeout"
             title={copy.controlsTime}
             description={copy.controlsTimeDescription}
             value={formatControlsTimeout(settings.controlsHideDelayMs)}
-            previousFocusKey="settings-detail-back"
+            previousFocusKey={getSelectedPlayerModeFocusKey('series')}
             nextFocusKey="settings-auto-next"
             onPress={cycleControlsTimeout}
           />
@@ -684,7 +901,7 @@ export default function SettingsScreen({
 
   const firstActionFocusKeyBySection: Record<SettingsSection, string> = {
     general: getLanguageFocusKey(settings.language),
-    player: 'settings-controls-timeout',
+    player: getSelectedPlayerModeFocusKey('live'),
     performance: 'settings-clear-cache',
     remote: 'settings-detail-close',
     subscription: 'settings-subscription-refresh',

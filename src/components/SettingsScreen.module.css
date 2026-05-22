@@ -146,7 +146,8 @@
   text-align: left;
 }
 
-.languageSelect {
+.languageSelect,
+.modeSelect {
   width: 100%;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -154,21 +155,25 @@
   padding: 0.9rem 1.1rem;
 }
 
-.languageSelectHeader {
+.languageSelectHeader,
+.modeSelectHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 1rem;
 }
 
-.languageOptions {
+.languageOptions,
+.modeOptions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.7rem;
   margin-top: 0.9rem;
+  align-items: stretch;
 }
 
-.languageOption {
+.languageOption,
+.modeOption {
   min-height: 58px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -185,7 +190,40 @@
   transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
 }
 
-.languageOption strong {
+.modeOption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  justify-content: stretch;
+  min-height: 82px;
+  padding: 0.85rem 0.95rem;
+  text-align: left;
+}
+
+.modeOption span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.24rem;
+  min-width: 0;
+}
+
+.modeOption span strong {
+  display: block;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modeOption small {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.76rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.languageOption strong,
+.modeOption em {
   border-radius: 999px;
   padding: 0.3rem 0.55rem;
   background: rgba(34, 197, 94, 0.15);
@@ -193,9 +231,13 @@
   color: #bbf7d0;
   font-size: 0.78rem;
   font-weight: 900;
+  font-style: normal;
+  justify-self: end;
+  white-space: nowrap;
 }
 
-.languageOptionSelected {
+.languageOptionSelected,
+.modeOptionSelected {
   background: rgba(139, 92, 246, 0.16);
   border-color: rgba(139, 92, 246, 0.42);
 }
@@ -207,12 +249,18 @@
 
 .languageSelect + .optionRow,
 .languageSelect + .infoRow,
+.languageSelect + .modeSelect,
+.modeSelect + .modeSelect,
+.modeSelect + .optionRow,
+.modeSelect + .infoRow,
 .optionRow + .optionRow,
 .optionRow + .infoRow,
 .infoRow + .optionRow,
 .infoRow + .infoRow,
 .optionRow + .languageSelect,
-.infoRow + .languageSelect {
+.optionRow + .modeSelect,
+.infoRow + .languageSelect,
+.infoRow + .modeSelect {
   margin-top: 0.65rem;
 }
 
@@ -309,6 +357,7 @@
 .sectionCard:focus-visible,
 .optionRow:focus-visible,
 .languageOption:focus-visible,
+.modeOption:focus-visible,
 .panelButton:focus-visible {
   outline: none;
   transform: translateY(-2px) scale(1.005);
@@ -333,7 +382,9 @@
   .optionRow,
   .infoRow,
   .languageSelectHeader,
-  .languageOptions {
+  .languageOptions,
+  .modeSelectHeader,
+  .modeOptions {
     grid-template-columns: 1fr;
   }
 
