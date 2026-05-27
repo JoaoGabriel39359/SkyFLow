@@ -1,10 +1,28 @@
 import { useState, useEffect } from 'react';
 import styles from './SubRevendedores.module.css';
 
+type Device = {
+    mac_address: string;
+    iptv_user: string;
+    iptv_url: string;
+    expires_at: string;
+    is_active: boolean;
+    updated_at: string;
+};
+
+type SubReseller = {
+    id: string;
+    username: string;
+    credits: number;
+    created_at: string;
+};
+
 export default function SubRevendedores({ token, onCreditUpdate }: any) {
-    const [subResellers, setSubResellers] = useState([]);
+    const [subResellers, setSubResellers] = useState<SubReseller[]>([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [showTransferModal, setShowTransferModal] = useState<any>(null);
+    const [showTransferModal, setShowTransferModal] = useState<SubReseller | null>(null);
+    const [showDevicesModal, setShowDevicesModal] = useState<{ reseller: SubReseller; devices: Device[] } | null>(null);
+    const [loadingDevices, setLoadingDevices] = useState(false);
     const [form, setForm] = useState({ username: '', password: '' });
     const [transferAmount, setTransferAmount] = useState('');
 
@@ -43,6 +61,7 @@ export default function SubRevendedores({ token, onCreditUpdate }: any) {
 
     const handleTransfer = async (e: any) => {
         e.preventDefault();
+        if (!showTransferModal) return;
         try {
             const res = await fetch('http://localhost:8000/api/v1/resellers/transfer', {
                 method: 'POST',
@@ -64,6 +83,25 @@ export default function SubRevendedores({ token, onCreditUpdate }: any) {
         }
     };
 
+    const handleViewDevices = async (reseller: SubReseller) => {
+        setLoadingDevices(true);
+        try {
+            const res = await fetch(`http://localhost:8000/api/v1/resellers/${reseller.id}/devices`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setShowDevicesModal({ reseller, devices: data.devices });
+            } else {
+                alert('Erro ao carregar clientes do sub-revendedor');
+            }
+        } catch (e) {
+            alert('Erro de conexão');
+        } finally {
+            setLoadingDevices(false);
+        }
+    };
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
@@ -82,14 +120,17 @@ export default function SubRevendedores({ token, onCreditUpdate }: any) {
                         </tr>
                     </thead>
                     <tbody className={styles.tbody}>
-                        {subResellers.map((r: any) => (
+                        {subResellers.map((r) => (
                             <tr key={r.id}>
                                 <td className={styles.td}><strong>{r.username}</strong></td>
                                 <td className={styles.td}><span style={{color: '#8b5cf6', fontWeight: 900}}>{r.credits} CR</span></td>
                                 <td className={styles.td}>{new Date(r.created_at).toLocaleDateString()}</td>
-                                <td className={styles.td}>
+                                <td className={styles.td} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                     <button className={styles.btnTransfer} onClick={() => setShowTransferModal(r)}>
                                         Enviar Créditos
+                                    </button>
+                                    <button className={styles.btnView} onClick={() => handleViewDevices(r)} disabled={loadingDevices}>
+                                        {loadingDevices ? '...' : 'Ver Clientes'}
                                     </button>
                                 </td>
                             </tr>
@@ -141,6 +182,71 @@ export default function SubRevendedores({ token, onCreditUpdate }: any) {
                                 <button type="submit" className={styles.btnSubmit}>Transferir Agora</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Clientes do Sub-Revendedor */}
+            {showDevicesModal && (
+                <div className={styles.modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) setShowDevicesModal(null); }}>
+                    <div className={styles.modal} style={{ maxWidth: '780px', width: '95%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h3 className={styles.modalTitle} style={{ marginBottom: 0 }}>
+                                Clientes de <span style={{ color: '#8b5cf6' }}>{showDevicesModal.reseller.username}</span>
+                            </h3>
+                            <button onClick={() => setShowDevicesModal(null)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: '1.4rem' }}>✕</button>
+                        </div>
+
+                        {showDevicesModal.devices.length === 0 ? (
+                            <p style={{ textAlign: 'center', color: '#6b7280', padding: '2rem 0' }}>
+                                Este sub-revendedor ainda não ativou nenhum cliente.
+                            </p>
+                        ) : (
+                            <div className={styles.tableWrapper}>
+                                <table className={styles.table}>
+                                    <thead className={styles.thead}>
+                                        <tr>
+                                            <th className={styles.th}>MAC Address</th>
+                                            <th className={styles.th}>Usuário IPTV</th>
+                                            <th className={styles.th}>Status</th>
+                                            <th className={styles.th}>Expira em</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className={styles.tbody}>
+                                        {showDevicesModal.devices.map((d) => {
+                                            const expired = d.expires_at && new Date(d.expires_at) < new Date();
+                                            return (
+                                                <tr key={d.mac_address}>
+                                                    <td className={styles.td}><code style={{ fontSize: '0.8rem' }}>{d.mac_address}</code></td>
+                                                    <td className={styles.td}>{d.iptv_user}</td>
+                                                    <td className={styles.td}>
+                                                        <span style={{
+                                                            padding: '2px 10px',
+                                                            borderRadius: '999px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 700,
+                                                            background: expired ? '#3b1a1a' : '#1a3b2a',
+                                                            color: expired ? '#f87171' : '#34d399'
+                                                        }}>
+                                                            {expired ? 'Expirado' : 'Ativo'}
+                                                        </span>
+                                                    </td>
+                                                    <td className={styles.td}>
+                                                        {d.expires_at ? new Date(d.expires_at).toLocaleDateString('pt-BR') : '-'}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        <div style={{ marginTop: '16px', textAlign: 'right' }}>
+                            <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>
+                                Total: {showDevicesModal.devices.length} cliente(s)
+                            </span>
+                        </div>
                     </div>
                 </div>
             )}

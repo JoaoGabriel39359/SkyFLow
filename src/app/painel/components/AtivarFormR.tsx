@@ -12,22 +12,23 @@ export default function AtivarForm({ onSuccess, setCredits }: AtivarFormProps) {
     const [formData, setFormData] = useState({ mac: '', url: '', user: '', password: '', days: 365, reseller_id: 'ADMIN' });
     const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent, daysToActivate: number) => {
         e.preventDefault();
         setIsLoading(true);
         try {
             const token = localStorage.getItem('token');
+            const dataToSend = { ...formData, days: daysToActivate };
             const res = await fetch('http://localhost:8000/api/v1/devices/activate', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(formData),
+                body: JSON.stringify(dataToSend),
             });
             const data = await res.json();
             if (res.ok) {
-                setStatus({ type: 'success', msg: 'Ativado com sucesso!' });
+                setStatus({ type: 'success', msg: dataToSend.days === 7 ? 'Teste gerado com sucesso!' : 'Ativado com sucesso!' });
                 setCredits(data.credits_remaining);
                 setFormData({ ...formData, mac: '', user: '', password: '' });
                 onSuccess();
@@ -39,7 +40,7 @@ export default function AtivarForm({ onSuccess, setCredits }: AtivarFormProps) {
     return (
         <div className={styles.container}>
             <h2 className={styles.title}>Ativar Dispositivo</h2>
-            <form onSubmit={handleSubmit} className={styles.form}>
+            <form className={styles.form}>
                 <input
                     className={styles.input}
                     placeholder="MAC ADDRESS (Ex: 00:AA:BB...)"
@@ -51,9 +52,14 @@ export default function AtivarForm({ onSuccess, setCredits }: AtivarFormProps) {
                 </div>
                 <input className={styles.input} placeholder="Server URL" value={formData.url} onChange={e => setFormData({ ...formData, url: e.target.value })} />
 
-                <button className={styles.button} disabled={isLoading}>
-                    {isLoading ? 'PROCESSANDO...' : 'CONFIRMAR ATIVAÇÃO'}
-                </button>
+                <div className={styles.row}>
+                    <button type="button" className={`${styles.button} ${styles.flex1}`} style={{ backgroundColor: '#ff9800' }} disabled={isLoading} onClick={(e) => handleSubmit(e, 7)}>
+                        {isLoading ? 'PROCESSANDO...' : 'TESTE DE 7 DIAS'}
+                    </button>
+                    <button type="button" className={`${styles.button} ${styles.flex1}`} disabled={isLoading} onClick={(e) => handleSubmit(e, 365)}>
+                        {isLoading ? 'PROCESSANDO...' : 'ATIVAÇÃO (1 ANO)'}
+                    </button>
+                </div>
             </form>
             {status && (
                 <div className={`${styles.statusMessage} ${status.type === 'success' ? styles.success : styles.error}`}>

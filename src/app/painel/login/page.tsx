@@ -14,13 +14,14 @@ export default function Login() {
         setLoading(true);
 
         try {
+            const formData = new URLSearchParams();
+            formData.append('username', username.trim().toLowerCase());
+            formData.append('password', password.trim());
+
             const res = await fetch('http://localhost:8000/api/v1/auth/login', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    username: username.trim().toLowerCase(), 
-                    password: password.trim() 
-                })
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
             });
 
             const data = await res.json();
@@ -44,26 +45,26 @@ export default function Login() {
         <div className={styles.container}>
             <div className={styles.loginCard}>
                 <h1 className={styles.title}>NUVIX<span>PRO</span></h1>
-                
+
                 <form className={styles.form} onSubmit={handleLogin}>
                     {error && <div className={styles.error}>{error}</div>}
-                    
+
                     <div className={styles.inputGroup}>
                         <label className={styles.label}>Usuário</label>
-                        <input 
-                            type="text" 
-                            className={styles.input} 
+                        <input
+                            type="text"
+                            className={styles.input}
                             value={username}
                             onChange={e => setUsername(e.target.value)}
                             required
                         />
                     </div>
-                    
+
                     <div className={styles.inputGroup}>
                         <label className={styles.label}>Senha</label>
-                        <input 
-                            type="password" 
-                            className={styles.input} 
+                        <input
+                            type="password"
+                            className={styles.input}
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             required
