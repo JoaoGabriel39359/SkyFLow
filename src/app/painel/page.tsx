@@ -13,7 +13,6 @@ export default function PainelRevendedor() {
     const [activeTab, setActiveTab] = useState<ResellerTab>('home');
     const [resellerCredits, setResellerCredits] = useState<number | null>(null);
     const [devices, setDevices] = useState<ResellerDevice[]>([]);
-    const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     const handleLogout = () => {
@@ -38,8 +37,7 @@ export default function PainelRevendedor() {
             }
             
             // O ideal é buscar os dados atualizados do usuário (me) na API.
-            const userData = JSON.parse(localStorage.getItem('user') || '{}');
-            setUser(userData);
+            const userData = JSON.parse(localStorage.getItem('user') || '{}') as { credits?: number };
             setResellerCredits(userData.credits ?? 0);
             
         } catch (error) {
@@ -68,7 +66,7 @@ export default function PainelRevendedor() {
                     {activeTab === 'home' && <Dashboard devices={devices} credits={resellerCredits} />}
                     {activeTab === 'ativar' && <AtivarForm onSuccess={refreshData} setCredits={setResellerCredits} />}
                     {activeTab === 'clientes' && <ClientesTable devices={devices} />}
-                    {activeTab === 'subrevendedores' && <SubRevendedores token={localStorage.getItem('token')} onCreditUpdate={refreshData} user={user} />}
+                    {activeTab === 'subrevendedores' && <SubRevendedores token={localStorage.getItem('token')} onCreditUpdate={refreshData} />}
                     {activeTab === 'pagamento' && <Pagamento />}
                 </div>
             </main>

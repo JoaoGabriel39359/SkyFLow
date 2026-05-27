@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import styles from './SubRevendedores.module.css';
 
 type Device = {
@@ -17,7 +17,12 @@ type SubReseller = {
     created_at: string;
 };
 
-export default function SubRevendedores({ token, onCreditUpdate }: any) {
+type SubRevendedoresProps = {
+    token: string | null;
+    onCreditUpdate: () => void | Promise<void>;
+};
+
+export default function SubRevendedores({ token, onCreditUpdate }: SubRevendedoresProps) {
     const [subResellers, setSubResellers] = useState<SubReseller[]>([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showTransferModal, setShowTransferModal] = useState<SubReseller | null>(null);
@@ -26,7 +31,9 @@ export default function SubRevendedores({ token, onCreditUpdate }: any) {
     const [form, setForm] = useState({ username: '', password: '' });
     const [transferAmount, setTransferAmount] = useState('');
 
-    const fetchSubResellers = async () => {
+    const fetchSubResellers = useCallback(async () => {
+        if (!token) return;
+
         try {
             const res = await fetch('http://localhost:8000/api/v1/resellers/', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -35,11 +42,17 @@ export default function SubRevendedores({ token, onCreditUpdate }: any) {
         } catch (e) {
             console.error(e);
         }
-    };
+    }, [token]);
 
-    useEffect(() => { fetchSubResellers(); }, []);
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            fetchSubResellers();
+        }, 0);
 
-    const handleCreate = async (e: any) => {
+        return () => window.clearTimeout(timeoutId);
+    }, [fetchSubResellers]);
+
+    const handleCreate = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         try {
             const res = await fetch('http://localhost:8000/api/v1/resellers/', {
@@ -54,14 +67,15 @@ export default function SubRevendedores({ token, onCreditUpdate }: any) {
             } else {
                 alert('Erro ao criar sub-revendedor');
             }
-        } catch (e) {
+        } catch {
             alert('Erro de conexão');
         }
     };
 
-    const handleTransfer = async (e: any) => {
+    const handleTransfer = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!showTransferModal) return;
+
         try {
             const res = await fetch('http://localhost:8000/api/v1/resellers/transfer', {
                 method: 'POST',
@@ -78,7 +92,7 @@ export default function SubRevendedores({ token, onCreditUpdate }: any) {
                 const data = await res.json();
                 alert(data.detail || 'Erro na transferência');
             }
-        } catch (e) {
+        } catch {
             alert('Erro de conexão');
         }
     };
