@@ -1,10 +1,39 @@
+type XtreamLoginResponse = {
+  user_info?: {
+    auth?: number;
+  };
+  server_info?: unknown;
+};
+
+async function readProxyJson(proxyUrl: string, fallbackValue: unknown) {
+  const response = await fetch(proxyUrl);
+  const contentType = response.headers.get('content-type') || '';
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    console.error(`Proxy respondeu com status ${response.status}:`, responseText.slice(0, 180));
+    return fallbackValue;
+  }
+
+  if (!contentType.includes('application/json')) {
+    console.error('Proxy retornou resposta nao-JSON:', responseText.slice(0, 180));
+    return fallbackValue;
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch (error) {
+    console.error('Erro ao interpretar JSON do proxy:', error, responseText.slice(0, 180));
+    return fallbackValue;
+  }
+}
+
 export async function loginXtream(baseUrl: string, user: string, pass: string) {
   const proxyUrl = `/api/xtream?url=${encodeURIComponent(baseUrl)}&username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}`;
   try {
-    const response = await fetch(proxyUrl);
-    const data = await response.json();
+    const data = await readProxyJson(proxyUrl, null) as XtreamLoginResponse | null;
     
-    if (data.user_info && data.user_info.auth === 1) {
+    if (data?.user_info && data.user_info.auth === 1) {
       return {
         success: true,
         userInfo: data.user_info,
@@ -20,8 +49,7 @@ export async function loginXtream(baseUrl: string, user: string, pass: string) {
 export async function getCategories(baseUrl: string, user: string, pass: string, action: string = 'get_live_categories') {
   const proxyUrl = `/api/xtream?url=${encodeURIComponent(baseUrl)}&username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&action=${action}`;
   try {
-    const response = await fetch(proxyUrl);
-    return await response.json();
+    return await readProxyJson(proxyUrl, []);
   } catch (error) {
     console.error(`Erro ao buscar categorias (${action}):`, error);
     return [];
@@ -35,8 +63,7 @@ export async function getStreams(baseUrl: string, user: string, pass: string, ac
   }
   
   try {
-    const response = await fetch(proxyUrl);
-    return await response.json();
+    return await readProxyJson(proxyUrl, []);
   } catch (error) {
     console.error(`Erro ao buscar streams (${action}):`, error);
     return [];

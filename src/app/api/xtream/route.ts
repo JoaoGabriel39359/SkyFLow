@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const baseUrl = searchParams.get('url');
@@ -32,7 +35,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: `Server responded with ${response.status}` }, { status: response.status });
     }
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type') || '';
+    const responseText = await response.text();
+
+    if (!contentType.includes('application/json')) {
+      console.error('Xtream returned non-JSON response:', responseText.slice(0, 180));
+      return NextResponse.json(
+        {
+          error: 'IPTV server returned a non-JSON response',
+          status: response.status,
+          preview: responseText.slice(0, 180),
+        },
+        { status: 502 }
+      );
+    }
+
+    const data = JSON.parse(responseText);
     return NextResponse.json(data);
   } catch (error) {
     console.error('Proxy Fetch Error:', error);
