@@ -45,9 +45,10 @@ export async function getStreams(baseUrl: string, user: string, pass: string, ac
 
 export function buildStreamUrl(baseUrl: string, user: string, pass: string, type: 'live' | 'vod' | 'series', streamId: string, extension: string = 'm3u8') {
   const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const cleanExtension = extension || 'm3u8';
   
   if (type === 'live') {
-    return `${cleanBase}/live/${user}/${pass}/${streamId}.m3u8`;
+    return `${cleanBase}/live/${user}/${pass}/${streamId}.${cleanExtension}`;
   } else if (type === 'vod') {
     return `${cleanBase}/movie/${user}/${pass}/${streamId}.${extension || 'mp4'}`;
   } else if (type === 'series') {

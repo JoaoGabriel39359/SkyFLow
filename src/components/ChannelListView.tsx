@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Play, Search, Star } from 'lucide-react';
+import Hls from 'hls.js';
+import { ArrowLeft, Play, Search, Star, X } from 'lucide-react';
 import {
   FocusContext,
   setFocus,
@@ -11,6 +12,9 @@ import { appCopy, type AppLanguage } from '@/lib/i18n';
 import { createIndexedSearchMatcher, createSearchIndex, hasSearchQuery } from '@/lib/search';
 import { useChannelEpg } from '@/hooks/useChannelEpg';
 import type { EpgProgram, XtreamCredentials } from '@/lib/epg';
+import { useMediaDetails } from '@/hooks/useMediaDetails';
+import type { MediaDetails, MediaDetailsType } from '@/lib/mediaDetails';
+import type { PlayerMode } from '@/lib/playerSettings';
 import styles from './ChannelListView.module.css';
 
 export type ChannelListViewChannel = {
@@ -18,19 +22,36 @@ export type ChannelListViewChannel = {
   name: string;
   logo: string;
   url?: string;
+  extension?: string;
+  categoryId?: string;
+  synopsis?: string;
+  rating?: string;
+  genre?: string;
+  releaseDate?: string;
+  backdrop?: string;
+  cast?: string;
+  director?: string;
+  trailerUrl?: string;
 };
 
 type ChannelListViewProps = {
   mediaTitle: string;
   categoryName: string;
   channels: ChannelListViewChannel[];
+  totalChannels: number;
   searchChannels: ChannelListViewChannel[];
+  searchPlaceholder: string;
+  searchScopeLabel: string;
+  isSearchCatalogLoading?: boolean;
   selectedChannel: ChannelListViewChannel | null;
   preparedChannelId: string | null;
   isLoading: boolean;
   favoriteIds: string[];
   favoriteFeedback: string;
   epgCredentials?: XtreamCredentials | null;
+  detailsCredentials?: XtreamCredentials | null;
+  previewPlayerMode?: PlayerMode;
+  mediaType?: 'live' | MediaDetailsType;
   showEpg?: boolean;
   emptyMessage?: string;
   onBack: () => void;
@@ -38,6 +59,7 @@ type ChannelListViewProps = {
   onChannelPress: (channel: ChannelListViewChannel) => void;
   onFavoriteToggle: (channel: ChannelListViewChannel) => void;
   onEndReached?: () => void;
+  onSearchOpen?: () => void;
   onPreviewPress: () => void;
   language: AppLanguage;
 };
@@ -164,17 +186,20 @@ function ChannelLogo({
   logo,
   name,
   variant,
+  poster = false,
 }: {
   logo: string;
   name: string;
   variant: 'list' | 'preview';
+  poster?: boolean;
 }) {
   return (
     <ChannelLogoContent
-      key={`${variant}-${logo}-${name}`}
+      key={`${variant}-${poster ? 'poster' : 'logo'}-${logo}-${name}`}
       logo={logo}
       name={name}
       variant={variant}
+      poster={poster}
     />
   );
 }
@@ -183,17 +208,24 @@ function ChannelLogoContent({
   logo,
   name,
   variant,
+  poster,
 }: {
   logo: string;
   name: string;
   variant: 'list' | 'preview';
+  poster: boolean;
 }) {
   const [fallback, setFallback] = useState(() => isLikelyMissingLogoUrl(logo));
 
   const className = variant === 'preview' ? styles.previewLogo : styles.channelLogo;
+  const posterClassName = poster
+    ? variant === 'preview'
+      ? styles.previewLogoPoster
+      : styles.channelLogoPoster
+    : '';
 
   return (
-    <span className={`${className} ${fallback ? styles.logoFallback : ''}`} aria-label={name}>
+    <span className={`${className} ${posterClassName} ${fallback ? styles.logoFallback : ''}`} aria-label={name}>
       {!fallback ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -254,6 +286,7 @@ function ChannelListItem({
   selected,
   prepared,
   favorite,
+  posterLayout,
   onFocus,
   onPress,
   onFavoriteToggle,
@@ -264,6 +297,7 @@ function ChannelListItem({
   selected: boolean;
   prepared: boolean;
   favorite: boolean;
+  posterLayout: boolean;
   onFocus: (channel: ChannelListViewChannel) => void;
   onPress: (channel: ChannelListViewChannel) => void;
   onFavoriteToggle: (channel: ChannelListViewChannel) => void;
@@ -302,11 +336,11 @@ function ChannelListItem({
     <button
       ref={ref}
       type="button"
-      className={`${styles.channelItem} ${focused ? styles.focused : ''} ${selected ? styles.selected : ''}`}
+      className={`${styles.channelItem} ${posterLayout ? styles.channelItemPoster : ''} ${focused ? styles.focused : ''} ${selected ? styles.selected : ''}`}
       onClick={() => onPress(channel)}
     >
       <span className={styles.channelIndex}>{index + 1}</span>
-      <ChannelLogo logo={channel.logo} name={channel.name} variant="list" />
+      <ChannelLogo logo={channel.logo} name={channel.name} variant="list" poster={posterLayout} />
       <span className={styles.channelText}>
         <span className={styles.channelName}>
           {channel.name}
@@ -318,11 +352,206 @@ function ChannelListItem({
   );
 }
 
+function LivePreviewPlayer({
+  channel,
+  favorite,
+  playerMode,
+  labels,
+}: {
+  channel: ChannelListViewChannel;
+  favorite: boolean;
+  playerMode: PlayerMode;
+  labels: {
+    liveBadge?: string;
+    fullscreenHint: string;
+    livePreviewLoading?: string;
+    livePreviewError?: string;
+  };
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    let hls: Hls | null = null;
+    let triedHls = false;
+    let triedNative = false;
+    let cancelled = false;
+    const video = videoRef.current;
+    const url = channel.url || '';
+
+    if (!video) return undefined;
+
+    const showError = () => {
+      if (cancelled) return;
+      setIsLoading(false);
+      setHasError(true);
+    };
+
+    const showReady = () => {
+      if (cancelled) return;
+      setIsLoading(false);
+      setHasError(false);
+    };
+
+    const playVideo = () => {
+      video.play().then(showReady).catch(showReady);
+    };
+
+    const destroyHls = () => {
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+    };
+
+    const nativeHlsSupport = Boolean(
+      video.canPlayType('application/vnd.apple.mpegurl') ||
+      video.canPlayType('application/x-mpegURL')
+    );
+    const normalizedUrl = url.toLowerCase();
+    const isHlsStream = normalizedUrl.includes('.m3u8') || normalizedUrl.includes('m3u8');
+    const isDirectVideoFile = /\.(mp4|webm|ogg|ogv|mov)(\?|#|$)/i.test(url);
+
+    const startNativePlayback = () => {
+      triedNative = true;
+      destroyHls();
+      video.src = url;
+      video.load();
+      playVideo();
+    };
+
+    const startHlsPlayback = () => {
+      if (!Hls.isSupported()) {
+        if (playerMode === 'auto' && !triedNative) {
+          startNativePlayback();
+          return;
+        }
+
+        showError();
+        return;
+      }
+
+      triedHls = true;
+      destroyHls();
+      hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        capLevelToPlayerSize: true,
+        maxBufferLength: 18,
+        backBufferLength: 8,
+      });
+      hls.loadSource(url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, playVideo);
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) return;
+
+        if (playerMode === 'auto' && !triedNative) {
+          startNativePlayback();
+          return;
+        }
+
+        showError();
+      });
+    };
+
+    const handleVideoError = () => {
+      if (playerMode === 'auto' && !triedHls && !isDirectVideoFile) {
+        startHlsPlayback();
+        return;
+      }
+
+      showError();
+    };
+
+    setIsLoading(true);
+    setHasError(false);
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    video.addEventListener('playing', showReady);
+    video.addEventListener('canplay', showReady);
+    video.addEventListener('error', handleVideoError);
+
+    if (!url) {
+      showError();
+    } else if (playerMode === 'native') {
+      startNativePlayback();
+    } else if (playerMode === 'hls') {
+      startHlsPlayback();
+    } else if (nativeHlsSupport || isDirectVideoFile) {
+      startNativePlayback();
+    } else if (isHlsStream || Hls.isSupported()) {
+      startHlsPlayback();
+    } else {
+      startNativePlayback();
+    }
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener('playing', showReady);
+      video.removeEventListener('canplay', showReady);
+      video.removeEventListener('error', handleVideoError);
+      destroyHls();
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    };
+  }, [channel.id, channel.url, playerMode]);
+
+  return (
+    <div className={styles.livePlayerShell}>
+      <video
+        ref={videoRef}
+        className={styles.livePreviewVideo}
+        muted
+        playsInline
+        autoPlay
+        preload="auto"
+      />
+
+      {isLoading && !hasError && (
+        <div className={styles.livePreviewState}>
+          <span className={styles.previewSpinner} aria-hidden="true" />
+          <strong>{labels.livePreviewLoading}</strong>
+        </div>
+      )}
+
+      {hasError && (
+        <div className={styles.livePreviewState}>
+          <strong>{labels.livePreviewError}</strong>
+        </div>
+      )}
+
+      <div className={styles.liveVideoShade} />
+      <div className={styles.liveVideoOverlay}>
+        <div className={styles.liveVideoTitle}>
+          {labels.liveBadge && <span className={styles.liveBadge}>{labels.liveBadge}</span>}
+          <h2>
+            {channel.name}
+            {favorite && <Star className={styles.favoriteStar} size={20} fill="currentColor" />}
+          </h2>
+        </div>
+
+        <span className={styles.liveFullscreenHint}>
+          <Play size={16} fill="currentColor" />
+          {labels.fullscreenHint}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function PreviewPanel({
   channel,
   prepared,
   favorite,
   canFocusEpg,
+  canFocusTrailer,
+  posterLayout,
+  previewPlayerMode,
+  details,
   onPreviewPress,
   onFavoriteToggle,
   labels,
@@ -331,6 +560,10 @@ function PreviewPanel({
   prepared: boolean;
   favorite: boolean;
   canFocusEpg?: boolean;
+  canFocusTrailer?: boolean;
+  posterLayout: boolean;
+  previewPlayerMode: PlayerMode;
+  details?: MediaDetails | null;
   onPreviewPress: () => void;
   onFavoriteToggle: (channel: ChannelListViewChannel) => void;
   labels: {
@@ -339,6 +572,9 @@ function PreviewPanel({
     fullscreenHint: string;
     selectChannel: string;
     selectChannelDescription: string;
+    liveBadge?: string;
+    livePreviewLoading?: string;
+    livePreviewError?: string;
   };
 }) {
   const enterHandlers = useLongEnterPress(
@@ -364,35 +600,98 @@ function PreviewPanel({
         return false;
       }
 
+      if (direction === 'down' && canFocusTrailer) {
+        setFocus('content-trailer');
+        return false;
+      }
+
       return true;
     },
   });
+  const heroImage = details?.backdrop || channel?.backdrop || channel?.logo || '';
+  const [heroImageFallback, setHeroImageFallback] = useState(() => isLikelyMissingLogoUrl(heroImage));
+  const heroMeta = [
+    details?.releaseDate || channel?.releaseDate,
+    details?.genre || channel?.genre,
+  ].filter(Boolean).join(' • ');
+  const heroSynopsis = details?.synopsis || channel?.synopsis || '';
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setHeroImageFallback(isLikelyMissingLogoUrl(heroImage));
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [heroImage]);
 
   return (
     <button
       ref={ref}
       type="button"
-      className={`${styles.previewPanel} ${focused ? styles.focused : ''}`}
+      className={`${styles.previewPanel} ${posterLayout ? styles.previewPanelPoster : ''} ${focused ? styles.focused : ''}`}
       onClick={onPreviewPress}
       disabled={!channel}
     >
       {channel ? (
-        <>
-          <div className={styles.previewArt}>
-            <ChannelLogo logo={channel.logo} name={channel.name} variant="preview" />
+        posterLayout ? (
+          <div className={styles.mediaHero}>
+            {!heroImageFallback && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                className={styles.mediaHeroBackdrop}
+                src={heroImage}
+                alt=""
+                loading="eager"
+                decoding="async"
+                onError={() => setHeroImageFallback(true)}
+              />
+            )}
+            <div className={styles.mediaHeroShade} />
+            <div className={styles.mediaHeroInfo}>
+              <span className={styles.previewBadge}>{prepared ? labels.selected : labels.lightweightPreview}</span>
+              <h2>
+                {channel.name}
+                {favorite && <Star className={styles.favoriteStar} size={22} fill="currentColor" />}
+              </h2>
+              {heroMeta && <p className={styles.mediaHeroMeta}>{heroMeta}</p>}
+              {heroSynopsis && <p className={styles.mediaHeroSynopsis}>{heroSynopsis}</p>}
+            </div>
+            <div className={styles.mediaHeroPosterWrap}>
+              <ChannelLogo logo={channel.logo} name={channel.name} variant="preview" poster />
+              <span className={styles.mediaHeroPlay}>
+                <Play size={30} fill="currentColor" />
+              </span>
+            </div>
           </div>
-          <div className={styles.previewOverlay}>
-            <span className={styles.previewBadge}>{prepared ? labels.selected : labels.lightweightPreview}</span>
-            <h2>
-              {channel.name}
-              {favorite && <Star className={styles.favoriteStar} size={22} fill="currentColor" />}
-            </h2>
-            <p>{labels.fullscreenHint}</p>
-          </div>
-          <span className={styles.playIcon}>
-            <Play size={34} fill="currentColor" />
-          </span>
-        </>
+        ) : labels.liveBadge ? (
+          <LivePreviewPlayer
+            channel={channel}
+            favorite={favorite}
+            playerMode={previewPlayerMode}
+            labels={{
+              liveBadge: labels.liveBadge,
+              fullscreenHint: labels.fullscreenHint,
+              livePreviewLoading: labels.livePreviewLoading,
+              livePreviewError: labels.livePreviewError,
+            }}
+          />
+        ) : (
+          <>
+            <div className={styles.previewArt}>
+              <ChannelLogo logo={channel.logo} name={channel.name} variant="preview" poster={false} />
+            </div>
+            <div className={styles.previewOverlay}>
+              <span className={styles.previewBadge}>{prepared ? labels.selected : labels.lightweightPreview}</span>
+              <h2>
+                {channel.name}
+                {favorite && <Star className={styles.favoriteStar} size={22} fill="currentColor" />}
+              </h2>
+            </div>
+            <span className={styles.playIcon}>
+              <Play size={34} fill="currentColor" />
+            </span>
+          </>
+        )
       ) : (
         <div className={styles.emptyPreview}>
           <span>N</span>
@@ -465,56 +764,6 @@ function EpgProgramRow({
   );
 }
 
-function EpgInfoCard({
-  channel,
-  currentProgram,
-  isLoading,
-  hasEpg,
-  labels,
-}: {
-  channel: ChannelListViewChannel | null;
-  currentProgram: EpgProgram | null;
-  isLoading: boolean;
-  hasEpg: boolean;
-  labels: {
-    liveBadge: string;
-    epgCurrentProgram: string;
-    epgLoading: string;
-    epgUnavailable: string;
-    epgNoChannel: string;
-  };
-}) {
-  return (
-    <section className={styles.previewInfoCard} aria-live="polite">
-      <span className={styles.liveBadge}>{labels.liveBadge}</span>
-      <h2>{channel?.name || labels.epgNoChannel}</h2>
-
-      {channel ? (
-        <div className={styles.currentProgram}>
-          <span>{labels.epgCurrentProgram}</span>
-          {isLoading ? (
-            <p>{labels.epgLoading}</p>
-          ) : hasEpg && currentProgram ? (
-            <>
-              <strong>{currentProgram.title}</strong>
-              <small>{currentProgram.startTimeLabel} - {currentProgram.endTimeLabel}</small>
-              {currentProgram.progressPercent !== undefined && (
-                <div className={styles.epgProgress} aria-hidden="true">
-                  <span style={{ width: `${currentProgram.progressPercent}%` }} />
-                </div>
-              )}
-            </>
-          ) : (
-            <p>{labels.epgUnavailable}</p>
-          )}
-        </div>
-      ) : (
-        <p className={styles.noEpgText}>{labels.epgNoChannel}</p>
-      )}
-    </section>
-  );
-}
-
 function EpgProgramList({
   programs,
   isLoading,
@@ -583,17 +832,256 @@ function EpgProgramList({
   );
 }
 
+const getDetailRows = (details: MediaDetails | null, labels: {
+  detailsGenre: string;
+  detailsYear: string;
+  detailsCast: string;
+  detailsDirector: string;
+}) => {
+  if (!details) return [];
+
+  return [
+    { label: labels.detailsGenre, value: details.genre },
+    { label: labels.detailsYear, value: details.releaseDate },
+    { label: labels.detailsCast, value: details.cast },
+    { label: labels.detailsDirector, value: details.director },
+  ].filter((item) => item.value);
+};
+
+function TrailerActionButton({
+  trailerUrl,
+  label,
+  selectedChannelId,
+  onPress,
+}: {
+  trailerUrl: string;
+  label: string;
+  selectedChannelId?: string;
+  onPress: (url: string) => void;
+}) {
+  const { ref, focused } = useFocusable({
+    focusKey: 'content-trailer',
+    onEnterPress: () => onPress(trailerUrl),
+    onArrowPress: (direction) => {
+      if (direction === 'up') {
+        setFocus('content-preview');
+        return false;
+      }
+
+      if (direction === 'left' && selectedChannelId) {
+        setFocus(getChannelFocusKey(selectedChannelId));
+        return false;
+      }
+
+      return true;
+    },
+  });
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={`${styles.trailerButton} ${focused ? styles.focused : ''}`}
+      onClick={() => onPress(trailerUrl)}
+    >
+      <Play size={16} fill="currentColor" aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
+
+function TrailerCloseButton({
+  label,
+  onClose,
+}: {
+  label: string;
+  onClose: () => void;
+}) {
+  const { ref, focused } = useFocusable({
+    focusKey: 'trailer-close',
+    onEnterPress: onClose,
+  });
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={`${styles.trailerCloseButton} ${focused ? styles.focused : ''}`}
+      onClick={onClose}
+      aria-label={label}
+      title={label}
+    >
+      <X size={24} aria-hidden="true" />
+    </button>
+  );
+}
+
+function TrailerModal({
+  trailer,
+  labels,
+  onClose,
+}: {
+  trailer: { url: string; title: string };
+  labels: {
+    trailerTitle: string;
+    closeTrailer: string;
+  };
+  onClose: () => void;
+}) {
+  const { ref, focusKey } = useFocusable({
+    focusKey: 'trailer-modal',
+    trackChildren: true,
+    isFocusBoundary: true,
+    focusBoundaryDirections: ['up', 'down', 'left', 'right'],
+    preferredChildFocusKey: 'trailer-close',
+  });
+
+  useEffect(() => {
+    window.setTimeout(() => setFocus('trailer-close'), 0);
+  }, []);
+
+  return (
+    <FocusContext.Provider value={focusKey}>
+      <div
+        ref={ref}
+        className={styles.trailerOverlay}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${labels.trailerTitle}: ${trailer.title}`}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            onClose();
+          }
+        }}
+      >
+        <div className={styles.trailerModal}>
+          <div className={styles.trailerModalHeader}>
+            <div>
+              <span>{labels.trailerTitle}</span>
+              <strong>{trailer.title}</strong>
+            </div>
+            <TrailerCloseButton label={labels.closeTrailer} onClose={onClose} />
+          </div>
+
+          <div className={styles.trailerFrameWrap}>
+            <iframe
+              className={styles.trailerFrame}
+              src={trailer.url}
+              title={`${labels.trailerTitle}: ${trailer.title}`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
+        </div>
+      </div>
+    </FocusContext.Provider>
+  );
+}
+
+function MediaDetailsPanel({
+  channel,
+  details,
+  isLoading,
+  labels,
+  onTrailerPress,
+}: {
+  channel: ChannelListViewChannel | null;
+  details: MediaDetails | null;
+  isLoading: boolean;
+  onTrailerPress: (url: string) => void;
+  labels: {
+    detailsTitle: string;
+    detailsInfo: string;
+    detailsLoading: string;
+    detailsUnavailable: string;
+    detailsNoContent: string;
+    detailsGenre: string;
+    detailsYear: string;
+    detailsCast: string;
+    detailsDirector: string;
+    watchTrailer: string;
+  };
+}) {
+  const detailRows = getDetailRows(details, labels);
+
+  return (
+    <section className={styles.detailsPanel} aria-live="polite" aria-label={isLoading ? labels.detailsLoading : labels.detailsTitle}>
+      <div className={styles.epgHeader}>
+        <span>{labels.detailsTitle}</span>
+        <div className={styles.detailsHeaderActions}>
+          {details?.trailerUrl && (
+            <TrailerActionButton
+              trailerUrl={details.trailerUrl}
+              label={labels.watchTrailer}
+              selectedChannelId={channel?.id}
+              onPress={onTrailerPress}
+            />
+          )}
+
+          {details?.rating ? (
+            <strong className={styles.ratingBadge}>
+              <Star size={18} fill="currentColor" aria-hidden="true" />
+              {details.rating}
+            </strong>
+          ) : (
+            <strong>{labels.detailsInfo}</strong>
+          )}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className={styles.epgSkeletonList}>
+          <div className={styles.detailsSkeletonLine} />
+          <div className={styles.detailsSkeletonLine} />
+          <div className={styles.detailsSkeletonShort} />
+        </div>
+      ) : !channel ? (
+        <div className={styles.epgEmpty}>{labels.detailsNoContent}</div>
+      ) : !details ? (
+        <div className={styles.epgEmpty}>{labels.detailsUnavailable}</div>
+      ) : (
+        <div className={styles.detailsBody}>
+          {details.synopsis ? (
+            <p className={styles.detailsSynopsis}>{details.synopsis}</p>
+          ) : (
+            <p className={styles.noEpgText}>{labels.detailsUnavailable}</p>
+          )}
+
+          {detailRows.length > 0 && (
+            <dl className={styles.detailsMetaGrid}>
+              {detailRows.map((item) => (
+                <div key={item.label}>
+                  <dt>{item.label}</dt>
+                  <dd>{item.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function ChannelListView({
   mediaTitle,
   categoryName,
   channels,
+  totalChannels,
   searchChannels,
+  searchPlaceholder,
+  searchScopeLabel,
+  isSearchCatalogLoading = false,
   selectedChannel,
   preparedChannelId,
   isLoading,
   favoriteIds,
   favoriteFeedback,
   epgCredentials,
+  detailsCredentials,
+  previewPlayerMode = 'auto',
+  mediaType = 'live',
   showEpg = false,
   emptyMessage,
   onBack,
@@ -601,6 +1089,7 @@ export default function ChannelListView({
   onChannelPress,
   onFavoriteToggle,
   onEndReached,
+  onSearchOpen,
   onPreviewPress,
   language,
 }: ChannelListViewProps) {
@@ -608,6 +1097,7 @@ export default function ChannelListView({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResultLimit, setSearchResultLimit] = useState(SEARCH_RESULT_BATCH_SIZE);
+  const [activeTrailer, setActiveTrailer] = useState<{ url: string; title: string } | null>(null);
   const [asyncSearchResult, setAsyncSearchResult] = useState<SearchResultState>({
     query: '',
     limit: SEARCH_RESULT_BATCH_SIZE,
@@ -624,7 +1114,6 @@ export default function ChannelListView({
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const {
     programs: epgPrograms,
-    currentProgram,
     isLoading: isEpgLoading,
     hasEpg,
   } = useChannelEpg({
@@ -633,6 +1122,35 @@ export default function ChannelListView({
     enabled: showEpg && Boolean(selectedChannel),
     limit: 24,
   });
+  const detailsMediaType = mediaType === 'movies' || mediaType === 'series' ? mediaType : null;
+  const detailsSeed = useMemo(() => {
+    if (!selectedChannel) return null;
+
+    return {
+      id: selectedChannel.id,
+      title: selectedChannel.name,
+      synopsis: selectedChannel.synopsis,
+      rating: selectedChannel.rating,
+      genre: selectedChannel.genre,
+      releaseDate: selectedChannel.releaseDate,
+      backdrop: selectedChannel.backdrop,
+      cast: selectedChannel.cast,
+      director: selectedChannel.director,
+      trailerUrl: selectedChannel.trailerUrl,
+    };
+  }, [selectedChannel]);
+  const {
+    details: mediaDetails,
+    isLoading: isMediaDetailsLoading,
+  } = useMediaDetails({
+    credentials: detailsCredentials,
+    mediaType: detailsMediaType,
+    streamId: selectedChannel?.id,
+    seed: detailsSeed,
+    enabled: Boolean(detailsMediaType && selectedChannel),
+  });
+  const showMediaDetails = Boolean(detailsMediaType);
+  const usePosterLayout = mediaType === 'movies' || mediaType === 'series';
   const hasSearch = hasSearchQuery(debouncedSearchQuery);
   const searchIndex = useMemo(
     () => createSearchIndex(searchChannels, (channel) => channel.name),
@@ -735,15 +1253,30 @@ export default function ChannelListView({
   }, [visibleChannels]);
 
   const openSearch = useCallback(() => {
+    onSearchOpen?.();
     setSearchOpen(true);
     window.setTimeout(() => searchInputRef.current?.focus(), 0);
-  }, []);
+  }, [onSearchOpen]);
 
   const closeSearch = useCallback(() => {
     setSearchQuery('');
     setSearchOpen(false);
     setSearchResultLimit(SEARCH_RESULT_BATCH_SIZE);
     window.setTimeout(() => setFocus('content-search'), 0);
+  }, []);
+
+  const openTrailer = useCallback((url: string) => {
+    if (!selectedChannel) return;
+
+    setActiveTrailer({
+      url,
+      title: mediaDetails?.title || selectedChannel.name,
+    });
+  }, [mediaDetails?.title, selectedChannel]);
+
+  const closeTrailer = useCallback(() => {
+    setActiveTrailer(null);
+    window.setTimeout(() => setFocus('content-trailer'), 0);
   }, []);
 
   useEffect(() => {
@@ -775,8 +1308,15 @@ export default function ChannelListView({
 
   const prepared = Boolean(selectedChannel && preparedChannelId === selectedChannel.id);
   const selectedChannelFavorite = Boolean(selectedChannel && favoriteIdSet.has(selectedChannel.id));
-  const totalChannelCount = Math.max(channels.length, searchChannels.length);
+  const totalChannelCount = Math.max(channels.length, totalChannels);
   const hasMoreSearchResults = hasSearch && !isSearchRunning && visibleChannels.length < searchResult.total;
+  const listTitleLabel = hasSearch
+    ? isSearchCatalogLoading
+      ? searchScopeLabel
+      : copy.content.searchResult
+    : searchOpen
+      ? searchScopeLabel
+      : copy.content.channels;
 
   return (
     <FocusContext.Provider value={focusKey}>
@@ -819,8 +1359,8 @@ export default function ChannelListView({
                       focusFirstChannel();
                     }
                   }}
-                  placeholder={copy.content.searchContent}
-                  aria-label={copy.content.searchContent}
+                  placeholder={searchPlaceholder}
+                  aria-label={searchPlaceholder}
                 />
               </label>
             )}
@@ -844,7 +1384,7 @@ export default function ChannelListView({
                   ? `${visibleChannels.length} / ${searchResult.total}`
                   : `${channels.length} / ${totalChannelCount}`}
               </span>
-              <strong>{hasSearch ? copy.content.searchResult : copy.content.channels}</strong>
+              <strong>{listTitleLabel}</strong>
             </div>
 
             {isLoading ? (
@@ -860,6 +1400,7 @@ export default function ChannelListView({
                       selected={selectedChannel?.id === channel.id}
                       prepared={preparedChannelId === channel.id}
                       favorite={favoriteIdSet.has(channel.id)}
+                      posterLayout={usePosterLayout}
                       onFocus={(focusedChannel) => {
                         onChannelFocus(focusedChannel);
 
@@ -891,40 +1432,36 @@ export default function ChannelListView({
             )}
           </div>
 
-          <aside className={`${styles.previewColumn} ${showEpg ? styles.previewColumnWithEpg : ''}`}>
+          <aside
+            className={[
+              styles.previewColumn,
+              showEpg ? styles.previewColumnWithEpg : '',
+              showMediaDetails ? styles.previewColumnWithDetails : '',
+            ].filter(Boolean).join(' ')}
+          >
             {showEpg ? (
               <>
-                <div className={styles.previewTop}>
-                  <PreviewPanel
-                    channel={selectedChannel}
-                    prepared={prepared}
-                    favorite={selectedChannelFavorite}
-                    canFocusEpg={hasEpg}
-                    onPreviewPress={onPreviewPress}
-                    onFavoriteToggle={onFavoriteToggle}
-                    labels={{
-                      selected: copy.content.selected,
-                      lightweightPreview: copy.content.lightweightPreview,
-                      fullscreenHint: copy.content.fullscreenHint,
-                      selectChannel: copy.content.selectChannel,
-                      selectChannelDescription: copy.content.selectChannelDescription,
-                    }}
-                  />
-
-                  <EpgInfoCard
-                    channel={selectedChannel}
-                    currentProgram={currentProgram}
-                    isLoading={isEpgLoading}
-                    hasEpg={hasEpg}
-                    labels={{
-                      liveBadge: copy.content.liveBadge,
-                      epgCurrentProgram: copy.content.epgCurrentProgram,
-                      epgLoading: copy.content.epgLoading,
-                      epgUnavailable: copy.content.epgUnavailable,
-                      epgNoChannel: copy.content.epgNoChannel,
-                    }}
-                  />
-                </div>
+                <PreviewPanel
+                  channel={selectedChannel}
+                  prepared={prepared}
+                  favorite={selectedChannelFavorite}
+                  canFocusEpg={hasEpg}
+                  posterLayout={usePosterLayout}
+                  previewPlayerMode={previewPlayerMode}
+                  details={null}
+                  onPreviewPress={onPreviewPress}
+                  onFavoriteToggle={onFavoriteToggle}
+                  labels={{
+                    selected: copy.content.selected,
+                    lightweightPreview: copy.content.lightweightPreview,
+                    fullscreenHint: copy.content.fullscreenHint,
+                    selectChannel: copy.content.selectChannel,
+                    selectChannelDescription: copy.content.selectChannelDescription,
+                    liveBadge: copy.content.liveBadge,
+                    livePreviewLoading: copy.content.livePreviewLoading,
+                    livePreviewError: copy.content.livePreviewError,
+                  }}
+                />
 
                 <EpgProgramList
                   programs={epgPrograms}
@@ -943,12 +1480,56 @@ export default function ChannelListView({
                   }}
                 />
               </>
+            ) : showMediaDetails ? (
+              <>
+                <PreviewPanel
+                  channel={selectedChannel}
+                  prepared={prepared}
+                  favorite={selectedChannelFavorite}
+                  canFocusEpg={false}
+                  canFocusTrailer={Boolean(mediaDetails?.trailerUrl)}
+                  posterLayout={usePosterLayout}
+                  previewPlayerMode={previewPlayerMode}
+                  details={mediaDetails}
+                  onPreviewPress={onPreviewPress}
+                  onFavoriteToggle={onFavoriteToggle}
+                  labels={{
+                    selected: copy.content.selected,
+                    lightweightPreview: copy.content.lightweightPreview,
+                    fullscreenHint: copy.content.fullscreenHint,
+                    selectChannel: copy.content.selectChannel,
+                    selectChannelDescription: copy.content.selectChannelDescription,
+                  }}
+                />
+
+                <MediaDetailsPanel
+                  channel={selectedChannel}
+                  details={mediaDetails}
+                  isLoading={isMediaDetailsLoading}
+                  onTrailerPress={openTrailer}
+                  labels={{
+                    detailsTitle: copy.content.detailsTitle,
+                    detailsInfo: copy.content.detailsInfo,
+                    detailsLoading: copy.content.detailsLoading,
+                    detailsUnavailable: copy.content.detailsUnavailable,
+                    detailsNoContent: copy.content.detailsNoContent,
+                    detailsGenre: copy.content.detailsGenre,
+                    detailsYear: copy.content.detailsYear,
+                    detailsCast: copy.content.detailsCast,
+                    detailsDirector: copy.content.detailsDirector,
+                    watchTrailer: copy.content.watchTrailer,
+                  }}
+                />
+              </>
             ) : (
               <PreviewPanel
                 channel={selectedChannel}
                 prepared={prepared}
                 favorite={selectedChannelFavorite}
                 canFocusEpg={false}
+                posterLayout={usePosterLayout}
+                previewPlayerMode={previewPlayerMode}
+                details={mediaDetails}
                 onPreviewPress={onPreviewPress}
                 onFavoriteToggle={onFavoriteToggle}
                 labels={{
@@ -974,6 +1555,17 @@ export default function ChannelListView({
             </div>
           </aside>
         </div>
+
+        {activeTrailer && (
+          <TrailerModal
+            trailer={activeTrailer}
+            labels={{
+              trailerTitle: copy.content.trailerTitle,
+              closeTrailer: copy.content.closeTrailer,
+            }}
+            onClose={closeTrailer}
+          />
+        )}
       </section>
     </FocusContext.Provider>
   );

@@ -1,0 +1,124 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.78);
+}
+
+.modal {
+  width: min(430px, 92vw);
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.7);
+  background: #0b0c18;
+  color: #fff;
+  padding: 1.35rem;
+  text-align: center;
+}
+
+.icon {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 0.75rem;
+  border-radius: 50%;
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.17);
+  color: #d9ccff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+
+.modal p {
+  margin: 0.55rem 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.94rem;
+  line-height: 1.4;
+}
+
+.pinDisplay {
+  min-height: 70px;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+}
+
+.pinDot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.34);
+}
+
+.pinDotFilled {
+  border-color: #c4b5fd;
+  background: #8b5cf6;
+}
+
+.error {
+  margin: -0.35rem 0 0.85rem;
+  color: #fca5a5;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.keyButton {
+  min-height: 54px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.22rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.iconButton {
+  color: #d9ccff;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.8rem;
+}
+
+.actionButton {
+  min-height: 58px;
+  font-size: 0.98rem;
+}
+
+.focused,
+.keyButton:focus-visible {
+  outline: none;
+  border-color: rgba(250, 204, 21, 0.95);
+  background: rgba(139, 92, 246, 0.28);
+  box-shadow:
+    inset 0 0 0 1px rgba(250, 204, 21, 0.55),
+    0 0 0 3px rgba(139, 92, 246, 0.32);
+}

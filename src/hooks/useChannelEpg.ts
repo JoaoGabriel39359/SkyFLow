@@ -93,10 +93,9 @@ export function useChannelEpg({
             error: null,
           });
         })
-        .catch((requestError) => {
+        .catch(() => {
           if (ignoreResult || abortController.signal.aborted) return;
 
-          console.error('Erro ao carregar EPG:', requestError);
           setState({
             cacheKey,
             programs: [],

@@ -5,7 +5,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import VideoPlayer from '@/components/VideoPlayer';
 import MainMenu, { MainMenuSection } from '@/components/MainMenu';
 import SettingsScreen from '@/components/SettingsScreen';
-import CategoryGrid, { MediaCategory } from '@/components/CategoryGrid';
+import CategoryGrid, { getCategoryFocusKey, MediaCategory } from '@/components/CategoryGrid';
+import ParentalPinModal from '@/components/ParentalPinModal';
 import ChannelListView, {
   ChannelListViewChannel,
   getChannelFocusKey,
@@ -15,6 +16,7 @@ import { getDeviceId } from '@/lib/device';
 import { getFavoriteIds, getFavorites, toggleFavorite } from '@/lib/favorites';
 import { appCopy, type AppLanguage } from '@/lib/i18n';
 import { DEFAULT_APP_SETTINGS, getAppSettings, saveAppSettings, type AppSettings } from '@/lib/settings';
+import { isRestrictedCategoryName, isValidParentalPin } from '@/lib/parentalControl';
 import { init, setFocus, useFocusable, FocusContext } from '@noriginmedia/norigin-spatial-navigation';
 
 init({
@@ -82,6 +84,69 @@ const emptyFavoriteIds: Record<MediaSection, string[]> = {
   live: [],
   movies: [],
   series: [],
+};
+
+const emptySearchCatalog: Record<MediaSection, ChannelListViewChannel[]> = {
+  live: [],
+  movies: [],
+  series: [],
+};
+
+const emptySearchLoading: Record<MediaSection, boolean> = {
+  live: false,
+  movies: false,
+  series: false,
+};
+
+const getStreamExtensionFromUrl = (url?: string) => {
+  if (!url) return '';
+
+  const cleanPath = url.split('?')[0]?.split('#')[0] || '';
+  const match = cleanPath.match(/\.([a-zA-Z0-9]+)$/);
+
+  return match?.[1] || '';
+};
+
+const mapStreamToChannel = (
+  stream: any,
+  params: ActionParams,
+  credentials: any,
+  fallbackCategoryId?: string
+): ChannelListViewChannel => {
+  const streamId = stream.stream_id || stream.series_id;
+  const name = stream.name || stream.title || 'Sem Nome';
+  const logo = stream.stream_icon || stream.cover || '';
+  const extension = stream.container_extension || 'm3u8';
+  const synopsis = stream.plot || stream.description || stream.desc || stream.overview || '';
+  const rating = stream.rating || stream.imdb_rating || stream.imdb || stream.tmdb_rating || stream.rating_5based || '';
+  const releaseDate = stream.releasedate || stream.release_date || stream.releaseDate || stream.year || '';
+  const backdrop = Array.isArray(stream.backdrop_path)
+    ? stream.backdrop_path[0] || ''
+    : stream.backdrop_path || stream.backdrop || stream.cover_big || '';
+  const trailerUrl = stream.youtube_trailer ||
+    stream.trailer ||
+    stream.youtube ||
+    stream.youtube_id ||
+    stream.youtubeId ||
+    stream.video_trailer ||
+    '';
+
+  return {
+    id: String(streamId),
+    name,
+    logo,
+    url: buildStreamUrl(credentials.url, credentials.user, credentials.pass, params.type, String(streamId), extension),
+    extension,
+    categoryId: String(stream.category_id || fallbackCategoryId || ''),
+    synopsis,
+    rating: rating ? String(rating) : '',
+    genre: stream.genre || '',
+    releaseDate: releaseDate ? String(releaseDate) : '',
+    backdrop: backdrop ? String(backdrop) : '',
+    cast: stream.cast || stream.actors || '',
+    director: stream.director || '',
+    trailerUrl: trailerUrl ? String(trailerUrl) : '',
+  };
 };
 
 type LogoutConfirmModalProps = {
@@ -195,8 +260,14 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState<MediaCategory | null>(null);
   const [favoriteIdsByType, setFavoriteIdsByType] = useState<Record<MediaSection, string[]>>(emptyFavoriteIds);
   const [favoriteFeedback, setFavoriteFeedback] = useState('');
+  const [searchCatalogByType, setSearchCatalogByType] = useState<Record<MediaSection, ChannelListViewChannel[]>>(emptySearchCatalog);
+  const [isSearchCatalogLoadingByType, setIsSearchCatalogLoadingByType] = useState<Record<MediaSection, boolean>>(emptySearchLoading);
+  const [pendingRestrictedCategory, setPendingRestrictedCategory] = useState<MediaCategory | null>(null);
+  const [restrictedCategoryPin, setRestrictedCategoryPin] = useState('');
+  const [restrictedCategoryError, setRestrictedCategoryError] = useState('');
   const hasSetInitialFocus = useRef(false);
   const categoryContentCache = useRef(new Map<string, ChannelListViewChannel[]>());
+  const searchCatalogCache = useRef(new Map<string, ChannelListViewChannel[]>());
   const copy = appCopy[appSettings.language];
 
   const checkDeviceSecurity = useCallback(async () => {
@@ -368,15 +439,28 @@ export default function Home() {
     setSelectedCategory(null);
     setPreviewChannel(null);
     setPreparedPreviewChannelId(null);
+    setPendingRestrictedCategory(null);
+    setRestrictedCategoryPin('');
+    setRestrictedCategoryError('');
     setIsLoadingCategories(false);
     setCanScrollDown(false);
+    setSearchCatalogByType(emptySearchCatalog);
+    setIsSearchCatalogLoadingByType(emptySearchLoading);
     categoryContentCache.current.clear();
+    searchCatalogCache.current.clear();
     checkDeviceSecurity();
   }, [checkDeviceSecurity]);
 
   const handleOpenLogoutConfirm = useCallback(() => {
     setIsLogoutConfirmOpen(true);
   }, []);
+
+  const handleCloseLogoutConfirm = useCallback(() => {
+    setIsLogoutConfirmOpen(false);
+    window.setTimeout(() => {
+      setFocus(activeTab === 'home' ? 'main-menu-logout' : 'settings-logout');
+    }, 0);
+  }, [activeTab]);
 
   const handleMainMenuSelect = useCallback((section: MainMenuSection) => {
     setMainMenuFocusKey(`main-menu-${section}`);
@@ -392,6 +476,9 @@ export default function Home() {
     setSelectedCategory(null);
     setPreviewChannel(null);
     setPreparedPreviewChannelId(null);
+    setPendingRestrictedCategory(null);
+    setRestrictedCategoryPin('');
+    setRestrictedCategoryError('');
     window.setTimeout(() => setFocus('main-menu-live'), 0);
   }, []);
 
@@ -403,10 +490,14 @@ export default function Home() {
   const handleSettingsChange = useCallback((nextSettings: AppSettings) => {
     setAppSettings(nextSettings);
     saveAppSettings(nextSettings);
+    searchCatalogCache.current.clear();
+    setSearchCatalogByType(emptySearchCatalog);
   }, []);
 
   const handleClearCatalogCache = useCallback(() => {
     categoryContentCache.current.clear();
+    searchCatalogCache.current.clear();
+    setSearchCatalogByType(emptySearchCatalog);
   }, []);
 
   const handleBackToCategories = useCallback(() => {
@@ -424,6 +515,9 @@ export default function Home() {
     const mappedCategories = allCategories.map((category) => ({
       id: String(category.category_id),
       name: category.category_name || 'Sem nome',
+      isRestricted:
+        appSettings.parentalControlEnabled &&
+        isRestrictedCategoryName(category.category_name || ''),
     }));
 
     return [
@@ -431,13 +525,19 @@ export default function Home() {
       { id: `${currentMediaKey}-all`, name: copy.media.all, isAll: true },
       ...mappedCategories,
     ];
-  }, [allCategories, copy.media.all, copy.media.favorites, currentMediaKey]);
+  }, [allCategories, appSettings.parentalControlEnabled, copy.media.all, copy.media.favorites, currentMediaKey]);
+
+  const restrictedCategoryIds = useMemo(() => new Set(
+    allCategories
+      .filter((category) => isRestrictedCategoryName(category.category_name || ''))
+      .map((category) => String(category.category_id))
+  ), [allCategories]);
 
   const loadCategoryStreams = useCallback(async (category: MediaCategory) => {
     if (!credentials) return;
 
     const params = getActionParams(activeTab);
-    const categoryCacheKey = `${params.type}:${category.id}`;
+    const categoryCacheKey = `${params.type}:${category.id}:${appSettings.parentalControlEnabled ? 'parental-on' : 'parental-off'}`;
     let firstChannelFocusKey = 'content-back';
     setSelectedCategory(category);
     setLoadedCategories([]);
@@ -449,12 +549,115 @@ export default function Home() {
 
     try {
       if (category.isFavorites) {
-        const channels: ChannelListViewChannel[] = getFavorites(currentMediaKey).map((favorite) => ({
-          id: favorite.id,
-          name: favorite.name,
-          logo: favorite.logo || '',
-          url: favorite.url,
-        }));
+        const storedFavorites = getFavorites(currentMediaKey)
+          .filter((favorite) => (
+            !appSettings.parentalControlEnabled ||
+            (
+              !restrictedCategoryIds.has(String(favorite.categoryId)) &&
+              !isRestrictedCategoryName(favorite.name)
+            )
+          ));
+        const favoriteStreamById = new Map<string, any>();
+
+        if (currentMediaKey === 'live') {
+          const favoriteCategoryIds = Array.from(new Set(
+            storedFavorites
+              .map((favorite) => favorite.categoryId)
+              .filter((categoryId): categoryId is string => Boolean(categoryId))
+          ));
+
+          await Promise.all(
+            favoriteCategoryIds.map(async (favoriteCategoryId) => {
+              const streams = await getStreams(
+                credentials.url,
+                credentials.user,
+                credentials.pass,
+                params.stream,
+                favoriteCategoryId
+              );
+
+              if (!Array.isArray(streams)) return;
+
+              streams.forEach((stream: any) => {
+                const streamId = stream.stream_id || stream.series_id;
+
+                if (streamId) {
+                  favoriteStreamById.set(String(streamId), stream);
+                }
+              });
+            })
+          );
+        }
+
+        const channels: ChannelListViewChannel[] = storedFavorites.map((favorite) => {
+          const matchedStream = favoriteStreamById.get(String(favorite.id));
+          const streamId = String(matchedStream?.stream_id || matchedStream?.series_id || favorite.id);
+          const extension = matchedStream?.container_extension ||
+            favorite.extension ||
+            getStreamExtensionFromUrl(favorite.url) ||
+            (currentMediaKey === 'live' ? 'm3u8' : 'mp4');
+          const name = matchedStream?.name || matchedStream?.title || favorite.name;
+          const logo = matchedStream?.stream_icon || matchedStream?.cover || favorite.logo || '';
+          const synopsis = matchedStream?.plot ||
+            matchedStream?.description ||
+            matchedStream?.desc ||
+            matchedStream?.overview ||
+            favorite.synopsis;
+          const rating = matchedStream?.rating ||
+            matchedStream?.imdb_rating ||
+            matchedStream?.imdb ||
+            matchedStream?.tmdb_rating ||
+            matchedStream?.rating_5based ||
+            favorite.rating;
+          const releaseDate = matchedStream?.releasedate ||
+            matchedStream?.release_date ||
+            matchedStream?.releaseDate ||
+            matchedStream?.year ||
+            favorite.releaseDate;
+          const backdrop = Array.isArray(matchedStream?.backdrop_path)
+            ? matchedStream.backdrop_path[0] || ''
+            : matchedStream?.backdrop_path || matchedStream?.backdrop || matchedStream?.cover_big || favorite.backdrop;
+          const trailerUrl = matchedStream?.youtube_trailer ||
+            matchedStream?.trailer ||
+            matchedStream?.youtube ||
+            matchedStream?.youtube_id ||
+            matchedStream?.youtubeId ||
+            matchedStream?.video_trailer ||
+            favorite.trailerUrl;
+
+          return {
+            id: favorite.id,
+            name,
+            logo,
+            url: currentMediaKey === 'live'
+              ? buildStreamUrl(
+                credentials.url,
+                credentials.user,
+                credentials.pass,
+                'live',
+                streamId,
+                extension
+              )
+              : favorite.url || buildStreamUrl(
+                credentials.url,
+                credentials.user,
+                credentials.pass,
+                params.type,
+                favorite.id,
+                'mp4'
+              ),
+            extension,
+            categoryId: String(matchedStream?.category_id || favorite.categoryId || ''),
+            synopsis,
+            rating: rating ? String(rating) : '',
+            genre: matchedStream?.genre || favorite.genre,
+            releaseDate: releaseDate ? String(releaseDate) : '',
+            backdrop: backdrop ? String(backdrop) : '',
+            cast: matchedStream?.cast || matchedStream?.actors || favorite.cast,
+            director: matchedStream?.director || favorite.director,
+            trailerUrl: trailerUrl ? String(trailerUrl) : '',
+          };
+        });
         const firstChannel = channels[0] ?? null;
 
         firstChannelFocusKey = firstChannel ? getChannelFocusKey(firstChannel.id) : 'content-back';
@@ -482,20 +685,12 @@ export default function Home() {
 
       const categoryId = category.isAll ? undefined : category.id;
       const streams = await getStreams(credentials.url, credentials.user, credentials.pass, params.stream, categoryId);
-      const channels: ChannelListViewChannel[] = Array.isArray(streams)
-        ? streams.map((stream: any) => {
-          const streamId = stream.stream_id || stream.series_id;
-          const name = stream.name || stream.title || 'Sem Nome';
-          const logo = stream.stream_icon || stream.cover || '';
-          const extension = stream.container_extension || 'm3u8';
-
-          return {
-            id: String(streamId),
-            name,
-            logo,
-            url: buildStreamUrl(credentials.url, credentials.user, credentials.pass, params.type, String(streamId), extension),
-          };
-        })
+      const visibleStreams =
+        Array.isArray(streams) && category.isAll && appSettings.parentalControlEnabled
+          ? streams.filter((stream: any) => !restrictedCategoryIds.has(String(stream.category_id)))
+          : streams;
+      const channels: ChannelListViewChannel[] = Array.isArray(visibleStreams)
+        ? visibleStreams.map((stream: any) => mapStreamToChannel(stream, params, credentials, category.id))
         : [];
 
       const firstChannel = channels[0] ?? null;
@@ -513,13 +708,132 @@ export default function Home() {
       setIsLoadingMore(false);
       window.setTimeout(() => setFocus(firstChannelFocusKey), 0);
     }
-  }, [activeTab, credentials, currentMediaKey]);
+  }, [activeTab, appSettings.parentalControlEnabled, credentials, currentMediaKey, restrictedCategoryIds]);
+
+  const loadSearchCatalog = useCallback(async () => {
+    if (!credentials || isSearchCatalogLoadingByType[currentMediaKey]) return;
+
+    const params = getActionParams(activeTab);
+    const cacheKey = `search:${params.type}:${appSettings.parentalControlEnabled ? 'parental-on' : 'parental-off'}`;
+    const cachedChannels = searchCatalogCache.current.get(cacheKey);
+
+    if (cachedChannels) {
+      setSearchCatalogByType((previousCatalog) => ({
+        ...previousCatalog,
+        [currentMediaKey]: cachedChannels,
+      }));
+      return;
+    }
+
+    setIsSearchCatalogLoadingByType((previousLoading) => ({
+      ...previousLoading,
+      [currentMediaKey]: true,
+    }));
+
+    try {
+      const streams = await getStreams(credentials.url, credentials.user, credentials.pass, params.stream);
+      const visibleStreams =
+        Array.isArray(streams) && appSettings.parentalControlEnabled
+          ? streams.filter((stream: any) => !restrictedCategoryIds.has(String(stream.category_id)))
+          : streams;
+      const channels: ChannelListViewChannel[] = Array.isArray(visibleStreams)
+        ? visibleStreams.map((stream: any) => mapStreamToChannel(stream, params, credentials))
+        : [];
+
+      searchCatalogCache.current.set(cacheKey, channels);
+      setSearchCatalogByType((previousCatalog) => ({
+        ...previousCatalog,
+        [currentMediaKey]: channels,
+      }));
+    } catch (error) {
+      console.error('Erro ao carregar catalogo da busca:', error);
+      setSearchCatalogByType((previousCatalog) => ({
+        ...previousCatalog,
+        [currentMediaKey]: [],
+      }));
+    } finally {
+      setIsSearchCatalogLoadingByType((previousLoading) => ({
+        ...previousLoading,
+        [currentMediaKey]: false,
+      }));
+    }
+  }, [
+    activeTab,
+    appSettings.parentalControlEnabled,
+    credentials,
+    currentMediaKey,
+    isSearchCatalogLoadingByType,
+    restrictedCategoryIds,
+  ]);
+
+  const closeRestrictedCategoryModal = useCallback(() => {
+    const category = pendingRestrictedCategory;
+
+    setPendingRestrictedCategory(null);
+    setRestrictedCategoryPin('');
+    setRestrictedCategoryError('');
+
+    window.setTimeout(() => {
+      setFocus(category ? getCategoryFocusKey(category.id) : 'category-grid-back');
+    }, 0);
+  }, [pendingRestrictedCategory]);
+
+  const handleCategorySelect = useCallback((category: MediaCategory) => {
+    if (
+      appSettings.parentalControlEnabled &&
+      isRestrictedCategoryName(category.name)
+    ) {
+      setPendingRestrictedCategory(category);
+      setRestrictedCategoryPin('');
+      setRestrictedCategoryError('');
+      return;
+    }
+
+    loadCategoryStreams(category);
+  }, [appSettings.parentalControlEnabled, loadCategoryStreams]);
+
+  const confirmRestrictedCategoryAccess = useCallback(() => {
+    if (!pendingRestrictedCategory) return;
+
+    if (!isValidParentalPin(restrictedCategoryPin)) {
+      setRestrictedCategoryError(copy.common.parentalPinIncomplete);
+      return;
+    }
+
+    if (restrictedCategoryPin !== appSettings.parentalControlPin) {
+      setRestrictedCategoryPin('');
+      setRestrictedCategoryError(copy.common.parentalPinInvalid);
+      return;
+    }
+
+    const category = pendingRestrictedCategory;
+
+    setPendingRestrictedCategory(null);
+    setRestrictedCategoryPin('');
+    setRestrictedCategoryError('');
+    loadCategoryStreams(category);
+  }, [appSettings.parentalControlPin, copy.common.parentalPinIncomplete, copy.common.parentalPinInvalid, loadCategoryStreams, pendingRestrictedCategory, restrictedCategoryPin]);
 
   const currentChannels: ChannelListViewChannel[] = useMemo(
     () => loadedCategories[0]?.channels ?? [],
     [loadedCategories]
   );
-  const searchSourceChannels = allCategoryChannels.length > 0 ? allCategoryChannels : currentChannels;
+  const searchCatalogChannels = searchCatalogByType[currentMediaKey] ?? [];
+  const searchSourceChannels = searchCatalogChannels.length > 0
+    ? searchCatalogChannels
+    : allCategoryChannels.length > 0
+      ? allCategoryChannels
+      : currentChannels;
+  const searchPlaceholderByType: Record<MediaSection, string> = {
+    live: copy.content.searchAllLive,
+    movies: copy.content.searchAllMovies,
+    series: copy.content.searchAllSeries,
+  };
+  const searchScopeLabelByType: Record<MediaSection, string> = {
+    live: copy.content.searchingAllLive,
+    movies: copy.content.searchingAllMovies,
+    series: copy.content.searchingAllSeries,
+  };
   const currentFavoriteIds = favoriteIdsByType[currentMediaKey] ?? [];
 
   const playableChannels = useMemo(
@@ -576,6 +890,13 @@ export default function Home() {
   }, [previewChannel]);
 
   const handleChannelPress = useCallback((channel: ChannelListViewChannel) => {
+    if (currentMediaKey === 'live') {
+      setPreviewChannel(channel);
+      setPreparedPreviewChannelId(channel.id);
+      setSelectedChannel(channel);
+      return;
+    }
+
     if (previewChannel?.id !== channel.id || preparedPreviewChannelId !== channel.id) {
       setPreviewChannel(channel);
       setPreparedPreviewChannelId(channel.id);
@@ -583,7 +904,7 @@ export default function Home() {
     }
 
     setSelectedChannel(channel);
-  }, [preparedPreviewChannelId, previewChannel]);
+  }, [currentMediaKey, preparedPreviewChannelId, previewChannel]);
 
   const handleFavoriteToggle = useCallback((channel: ChannelListViewChannel) => {
     const result = toggleFavorite(currentMediaKey, channel);
@@ -691,6 +1012,7 @@ export default function Home() {
       {activeTab === 'home' ? (
         <MainMenu
           onSelect={handleMainMenuSelect}
+          onLogout={handleOpenLogoutConfirm}
           initialFocusKey={mainMenuFocusKey}
           language={appSettings.language}
         />
@@ -712,7 +1034,7 @@ export default function Home() {
           categories={categoryGridItems}
           isLoading={isLoadingCategories}
           onBack={handleBackToMainMenu}
-          onSelect={loadCategoryStreams}
+          onSelect={handleCategorySelect}
           language={appSettings.language}
         />
       ) : (
@@ -720,13 +1042,20 @@ export default function Home() {
           mediaTitle={currentMediaTexts[currentMediaKey].title}
           categoryName={selectedCategory.name}
           channels={currentChannels}
+          totalChannels={allCategoryChannels.length || currentChannels.length}
           searchChannels={searchSourceChannels}
+          searchPlaceholder={searchPlaceholderByType[currentMediaKey]}
+          searchScopeLabel={searchScopeLabelByType[currentMediaKey]}
+          isSearchCatalogLoading={isSearchCatalogLoadingByType[currentMediaKey]}
           selectedChannel={previewChannel}
           preparedChannelId={preparedPreviewChannelId}
           isLoading={isLoadingMore}
           favoriteIds={currentFavoriteIds}
           favoriteFeedback={favoriteFeedback}
           epgCredentials={currentMediaKey === 'live' ? credentials : null}
+          detailsCredentials={currentMediaKey !== 'live' ? credentials : null}
+          previewPlayerMode={appSettings.playerModeByType.live}
+          mediaType={currentMediaKey}
           showEpg={currentMediaKey === 'live'}
           emptyMessage={
             selectedCategory.isFavorites
@@ -738,6 +1067,7 @@ export default function Home() {
           onChannelPress={handleChannelPress}
           onFavoriteToggle={handleFavoriteToggle}
           onEndReached={handleLoadMoreContent}
+          onSearchOpen={loadSearchCatalog}
           onPreviewPress={handlePreviewPress}
           language={appSettings.language}
         />
@@ -762,6 +1092,7 @@ export default function Home() {
           controlsHideDelayMs={appSettings.controlsHideDelayMs}
           autoPlayNext={appSettings.autoPlayNext}
           playerMode={appSettings.playerModeByType[currentMediaKey]}
+          contentType={currentMediaKey}
           language={appSettings.language}
         />
       )}
@@ -769,8 +1100,27 @@ export default function Home() {
       {isLogoutConfirmOpen && (
         <LogoutConfirmModal
           language={appSettings.language}
-          onCancel={() => setIsLogoutConfirmOpen(false)}
+          onCancel={handleCloseLogoutConfirm}
           onConfirm={handleLogout}
+        />
+      )}
+
+      {pendingRestrictedCategory && (
+        <ParentalPinModal
+          title={copy.common.parentalPinTitle}
+          description={copy.common.parentalPinDescription}
+          pin={restrictedCategoryPin}
+          error={restrictedCategoryError}
+          cancelLabel={copy.common.cancel}
+          confirmLabel={copy.common.parentalPinConfirm}
+          clearLabel={copy.common.parentalPinClear}
+          backspaceLabel={copy.common.parentalPinBackspace}
+          onPinChange={(pin) => {
+            setRestrictedCategoryPin(pin);
+            setRestrictedCategoryError('');
+          }}
+          onCancel={closeRestrictedCategoryModal}
+          onConfirm={confirmRestrictedCategoryAccess}
         />
       )}
 

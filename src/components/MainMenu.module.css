@@ -87,6 +87,35 @@
   gap: 1.4rem;
 }
 
+.footerActions {
+  margin-top: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.logoutButton {
+  min-height: 56px;
+  padding: 0 1.1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  background: rgba(127, 29, 29, 0.1);
+  color: rgba(255, 255, 255, 0.82);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease, box-shadow 0.14s ease;
+}
+
+.logoutButton svg {
+  color: rgba(255, 255, 255, 0.78);
+}
+
 .card {
   min-height: 280px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -137,6 +166,15 @@
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.42);
 }
 
+.logoutButton.focused,
+.logoutButton:focus-visible {
+  outline: none;
+  transform: translateY(-2px) scale(1.02);
+  border-color: rgba(139, 92, 246, 0.92);
+  background: rgba(139, 92, 246, 0.18);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.42);
+}
+
 .iconAction.focused,
 .iconAction:focus-visible {
   outline: none;
@@ -160,5 +198,9 @@
   .header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .footerActions {
+    margin-top: 2.4rem;
   }
 }

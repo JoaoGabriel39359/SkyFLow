@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { Film, PlayCircle, Settings, Tv } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Film, LogOut, PlayCircle, Settings, Tv } from 'lucide-react';
 import {
   FocusContext,
   setFocus,
@@ -14,6 +14,7 @@ export type MainMenuSection = 'live' | 'movies' | 'series' | 'settings';
 
 type MainMenuProps = {
   onSelect: (section: MainMenuSection) => void;
+  onLogout: () => void;
   initialFocusKey?: string;
   language: AppLanguage;
 };
@@ -26,11 +27,28 @@ type MenuCard = {
   focusKey: string;
 };
 
-function MainMenuCard({ card, onSelect }: { card: MenuCard; onSelect: (section: MainMenuSection) => void }) {
+function MainMenuCard({
+  card,
+  onSelect,
+  onFocusCard,
+}: {
+  card: MenuCard;
+  onSelect: (section: MainMenuSection) => void;
+  onFocusCard: (focusKey: string) => void;
+}) {
   const Icon = card.icon;
   const { ref, focused } = useFocusable({
     focusKey: card.focusKey,
     onEnterPress: () => onSelect(card.id),
+    onFocus: () => onFocusCard(card.focusKey),
+    onArrowPress: (direction) => {
+      if (direction === 'down') {
+        setFocus('main-menu-logout');
+        return false;
+      }
+
+      return true;
+    },
   });
 
   return (
@@ -49,8 +67,45 @@ function MainMenuCard({ card, onSelect }: { card: MenuCard; onSelect: (section: 
   );
 }
 
-export default function MainMenu({ onSelect, initialFocusKey = 'main-menu-live', language }: MainMenuProps) {
+function LogoutButton({
+  label,
+  lastCardFocusKey,
+  onLogout,
+}: {
+  label: string;
+  lastCardFocusKey: string;
+  onLogout: () => void;
+}) {
+  const { ref, focused } = useFocusable({
+    focusKey: 'main-menu-logout',
+    onEnterPress: onLogout,
+    onArrowPress: (direction) => {
+      if (direction === 'up') {
+        setFocus(lastCardFocusKey);
+        return false;
+      }
+
+      return true;
+    },
+  });
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={`${styles.logoutButton} ${focused ? styles.focused : ''}`}
+      onClick={onLogout}
+    >
+      <LogOut size={22} aria-hidden="true" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+export default function MainMenu({ onSelect, onLogout, initialFocusKey = 'main-menu-live', language }: MainMenuProps) {
   const copy = appCopy[language].mainMenu;
+  const commonCopy = appCopy[language].common;
+  const [lastCardFocusKey, setLastCardFocusKey] = useState(initialFocusKey);
   const menuCards: MenuCard[] = [
     {
       id: 'live',
@@ -114,8 +169,21 @@ export default function MainMenu({ onSelect, initialFocusKey = 'main-menu-live',
 
         <div className={styles.grid}>
           {menuCards.map((card) => (
-            <MainMenuCard key={card.id} card={card} onSelect={onSelect} />
+            <MainMenuCard
+              key={card.id}
+              card={card}
+              onSelect={onSelect}
+              onFocusCard={setLastCardFocusKey}
+            />
           ))}
+        </div>
+
+        <div className={styles.footerActions}>
+          <LogoutButton
+            label={commonCopy.logout}
+            lastCardFocusKey={lastCardFocusKey}
+            onLogout={onLogout}
+          />
         </div>
       </section>
     </FocusContext.Provider>

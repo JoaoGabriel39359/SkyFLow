@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Folder, Search, Star } from 'lucide-react';
+import { ArrowLeft, Folder, LockKeyhole, Search, Star } from 'lucide-react';
 import {
   FocusContext,
   setFocus,
@@ -16,6 +16,7 @@ export type MediaCategory = {
   name: string;
   isAll?: boolean;
   isFavorites?: boolean;
+  isRestricted?: boolean;
 };
 
 type CategoryGridProps = {
@@ -31,7 +32,7 @@ type CategoryGridProps = {
 const createFocusKeyPart = (value: string | number) =>
   String(value).replace(/[^a-zA-Z0-9_-]/g, '-');
 
-const getCategoryFocusKey = (categoryId: string | number) =>
+export const getCategoryFocusKey = (categoryId: string | number) =>
   `category-card-${createFocusKeyPart(categoryId)}`;
 
 const getGridColumnCount = (element: HTMLElement | null) => {
@@ -122,10 +123,10 @@ function CategoryCard({
   categories: MediaCategory[];
   index: number;
   onSelect: (category: MediaCategory) => void;
-  labels: { allBadge: string; favoritesBadge: string };
+  labels: { allBadge: string; favoritesBadge: string; restrictedBadge: string };
 }) {
   const focusKey = getCategoryFocusKey(category.id);
-  const Icon = category.isFavorites ? Star : Folder;
+  const Icon = category.isFavorites ? Star : category.isRestricted ? LockKeyhole : Folder;
   const { ref, focused } = useFocusable({
     focusKey,
     onEnterPress: () => onSelect(category),
@@ -179,12 +180,17 @@ function CategoryCard({
       className={`${styles.card} ${focused ? styles.focused : ''}`}
       onClick={() => onSelect(category)}
     >
-      <span className={`${styles.folderIcon} ${category.isFavorites ? styles.favoriteIcon : ''}`}>
+      <span className={[
+        styles.folderIcon,
+        category.isFavorites ? styles.favoriteIcon : '',
+        category.isRestricted ? styles.restrictedIcon : '',
+      ].filter(Boolean).join(' ')}>
         <Icon size={34} fill={category.isFavorites ? 'currentColor' : 'none'} />
       </span>
       <span className={styles.categoryName}>{category.name}</span>
       {category.isAll && <span className={styles.badge}>{labels.allBadge}</span>}
       {category.isFavorites && <span className={styles.favoriteBadge}>{labels.favoritesBadge}</span>}
+      {category.isRestricted && <span className={styles.restrictedBadge}>{labels.restrictedBadge}</span>}
     </button>
   );
 }
@@ -299,6 +305,7 @@ export default function CategoryGrid({
                   labels={{
                     allBadge: copy.categoryGrid.allBadge,
                     favoritesBadge: copy.categoryGrid.favoritesBadge,
+                    restrictedBadge: copy.categoryGrid.restrictedBadge,
                   }}
                 />
               ))

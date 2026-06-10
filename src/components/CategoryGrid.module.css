@@ -152,6 +152,12 @@
   color: #facc15;
 }
 
+.restrictedIcon {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
 .categoryName {
   color: #fff;
   font-size: 1.18rem;
@@ -173,6 +179,15 @@
   border-radius: 999px;
   color: #fde68a;
   background: rgba(234, 179, 8, 0.13);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.restrictedBadge {
+  padding: 0.35rem 0.58rem;
+  border-radius: 999px;
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.13);
   font-size: 0.78rem;
   font-weight: 800;
 }

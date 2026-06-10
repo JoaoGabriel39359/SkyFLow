@@ -174,7 +174,7 @@ export async function getShortEpg(
   const response = await fetch(proxyUrl, { signal });
 
   if (!response.ok) {
-    throw new Error(`EPG request failed with status ${response.status}`);
+    return [];
   }
 
   return normalizeEpgPrograms(await response.json()).slice(0, limit);

@@ -109,7 +109,7 @@ export default function SubRevendedores({ token, onCreditUpdate }: SubRevendedor
             } else {
                 alert('Erro ao carregar clientes do sub-revendedor');
             }
-        } catch (e) {
+        } catch {
             alert('Erro de conexão');
         } finally {
             setLoadingDevices(false);

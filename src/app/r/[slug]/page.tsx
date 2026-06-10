@@ -110,7 +110,13 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
         } catch { /* silent */ }
     }, [token]);
 
-    useEffect(() => { refreshData(); }, [refreshData]);
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            refreshData();
+        }, 0);
+
+        return () => window.clearTimeout(timeout);
+    }, [refreshData]);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -155,13 +161,17 @@ export default function ResellerPortalPage() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     useEffect(() => {
-        setIsLoggedIn(!!localStorage.getItem('token'));
-        if (!slug) { setPageLoading(false); return; }
-        fetch(`http://localhost:8000/api/v1/public/${slug}/info`)
-            .then(r => r.json())
-            .then(data => { if (data.exists) { setExists(true); setResellerName(data.username); } })
-            .catch(() => {})
-            .finally(() => setPageLoading(false));
+        const timeout = window.setTimeout(() => {
+            setIsLoggedIn(!!localStorage.getItem('token'));
+            if (!slug) { setPageLoading(false); return; }
+            fetch(`http://localhost:8000/api/v1/public/${slug}/info`)
+                .then(r => r.json())
+                .then(data => { if (data.exists) { setExists(true); setResellerName(data.username); } })
+                .catch(() => {})
+                .finally(() => setPageLoading(false));
+        }, 0);
+
+        return () => window.clearTimeout(timeout);
     }, [slug]);
 
     const handleActivate = async (e: FormEvent) => {

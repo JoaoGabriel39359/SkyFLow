@@ -7,6 +7,7 @@ import {
   Gauge,
   Info,
   KeyRound,
+  LockKeyhole,
   MonitorPlay,
   Settings,
   ShieldCheck,
@@ -24,9 +25,19 @@ import {
   type PlayerModeByType,
 } from '@/lib/playerSettings';
 import type { AppSettings } from '@/lib/settings';
+import { isValidParentalPin } from '@/lib/parentalControl';
+import ParentalPinModal from './ParentalPinModal';
 import styles from './SettingsScreen.module.css';
 
-type SettingsSection = 'general' | 'player' | 'performance' | 'remote' | 'subscription' | 'system';
+type SettingsSection = 'general' | 'player' | 'parental' | 'performance' | 'remote' | 'subscription' | 'system';
+
+type ParentalPinFlow = {
+  intent: 'enable' | 'disable' | 'change';
+  stage: 'verify' | 'new' | 'confirm';
+  pin: string;
+  nextPin: string;
+  error: string;
+};
 
 type SettingsScreenProps = {
   settings: AppSettings;
@@ -79,6 +90,10 @@ const settingsSectionIcons: Array<Pick<SectionCardConfig, 'id' | 'icon'>> = [
   {
     id: 'player',
     icon: MonitorPlay,
+  },
+  {
+    id: 'parental',
+    icon: LockKeyhole,
   },
   {
     id: 'performance',
@@ -533,6 +548,7 @@ export default function SettingsScreen({
       const textBySection: Record<SettingsSection, { title: string; description: string }> = {
         general: { title: copy.general, description: copy.generalDescription },
         player: { title: copy.player, description: copy.playerDescription },
+        parental: { title: copy.parental, description: copy.parentalDescription },
         performance: { title: copy.performance, description: copy.performanceDescription },
         remote: { title: copy.remote, description: copy.remoteDescription },
         subscription: { title: copy.subscription, description: copy.subscriptionDescription },
@@ -549,6 +565,7 @@ export default function SettingsScreen({
   const [activeSection, setActiveSection] = useState<SettingsSection | null>(null);
   const [lastSectionFocusKey, setLastSectionFocusKey] = useState(getSectionFocusKey('general'));
   const [feedback, setFeedback] = useState('');
+  const [parentalPinFlow, setParentalPinFlow] = useState<ParentalPinFlow | null>(null);
   const [systemInfo, setSystemInfo] = useState<Record<'resolution' | 'platform' | 'userAgent', string>>({
     resolution: copy.notReported,
     platform: copy.notReported,
@@ -590,6 +607,8 @@ export default function SettingsScreen({
 
       event.preventDefault();
 
+      if (parentalPinFlow) return;
+
       if (activeSection) {
         setActiveSection(null);
         window.setTimeout(() => setFocus(lastSectionFocusKey), 0);
@@ -602,7 +621,7 @@ export default function SettingsScreen({
     window.addEventListener('keydown', handleBackKey);
 
     return () => window.removeEventListener('keydown', handleBackKey);
-  }, [activeSection, lastSectionFocusKey, onBack]);
+  }, [activeSection, lastSectionFocusKey, onBack, parentalPinFlow]);
 
   useEffect(() => {
     if (!feedback) return;
@@ -632,6 +651,125 @@ export default function SettingsScreen({
     onSettingsChange(nextSettings);
     setFeedback(message);
   }, [onSettingsChange]);
+
+  const restoreParentalFocus = useCallback((intent: ParentalPinFlow['intent']) => {
+    window.setTimeout(() => {
+      setFocus(intent === 'change' ? 'settings-parental-pin' : 'settings-parental-toggle');
+    }, 0);
+  }, []);
+
+  const closeParentalPinFlow = useCallback(() => {
+    if (!parentalPinFlow) return;
+
+    const { intent } = parentalPinFlow;
+    setParentalPinFlow(null);
+    restoreParentalFocus(intent);
+  }, [parentalPinFlow, restoreParentalFocus]);
+
+  const openParentalPinFlow = useCallback((intent: ParentalPinFlow['intent']) => {
+    const needsVerification = intent !== 'enable' && isValidParentalPin(settings.parentalControlPin);
+
+    setParentalPinFlow({
+      intent,
+      stage: needsVerification ? 'verify' : 'new',
+      pin: '',
+      nextPin: '',
+      error: '',
+    });
+  }, [settings.parentalControlPin]);
+
+  const toggleParentalControl = useCallback(() => {
+    if (settings.parentalControlEnabled) {
+      openParentalPinFlow('disable');
+      return;
+    }
+
+    if (!isValidParentalPin(settings.parentalControlPin)) {
+      openParentalPinFlow('enable');
+      return;
+    }
+
+    updateSettings(
+      { ...settings, parentalControlEnabled: true },
+      copy.parentalEnabledFeedback
+    );
+  }, [copy.parentalEnabledFeedback, openParentalPinFlow, settings, updateSettings]);
+
+  const updateParentalPinInput = useCallback((pin: string) => {
+    setParentalPinFlow((currentFlow) => (
+      currentFlow
+        ? { ...currentFlow, pin, error: '' }
+        : currentFlow
+    ));
+  }, []);
+
+  const submitParentalPinFlow = useCallback(() => {
+    if (!parentalPinFlow) return;
+
+    if (!isValidParentalPin(parentalPinFlow.pin)) {
+      setParentalPinFlow({ ...parentalPinFlow, error: appCopy[settings.language].common.parentalPinIncomplete });
+      return;
+    }
+
+    if (parentalPinFlow.stage === 'verify') {
+      if (parentalPinFlow.pin !== settings.parentalControlPin) {
+        setParentalPinFlow({ ...parentalPinFlow, pin: '', error: appCopy[settings.language].common.parentalPinInvalid });
+        return;
+      }
+
+      if (parentalPinFlow.intent === 'disable') {
+        updateSettings(
+          { ...settings, parentalControlEnabled: false },
+          copy.parentalDisabledFeedback
+        );
+        setParentalPinFlow(null);
+        restoreParentalFocus(parentalPinFlow.intent);
+        return;
+      }
+
+      setParentalPinFlow({
+        ...parentalPinFlow,
+        stage: 'new',
+        pin: '',
+        error: '',
+      });
+      return;
+    }
+
+    if (parentalPinFlow.stage === 'new') {
+      setParentalPinFlow({
+        ...parentalPinFlow,
+        stage: 'confirm',
+        pin: '',
+        nextPin: parentalPinFlow.pin,
+        error: '',
+      });
+      return;
+    }
+
+    if (parentalPinFlow.pin !== parentalPinFlow.nextPin) {
+      setParentalPinFlow({
+        ...parentalPinFlow,
+        stage: 'new',
+        pin: '',
+        nextPin: '',
+        error: copy.parentalPinMismatch,
+      });
+      return;
+    }
+
+    updateSettings(
+      {
+        ...settings,
+        parentalControlEnabled:
+          parentalPinFlow.intent === 'enable' ? true : settings.parentalControlEnabled,
+        parentalControlPin: parentalPinFlow.pin,
+      },
+      copy.parentalPinSavedFeedback
+    );
+    setParentalPinFlow(null);
+    restoreParentalFocus(parentalPinFlow.intent);
+  }, [copy.parentalDisabledFeedback, copy.parentalPinMismatch, copy.parentalPinSavedFeedback, parentalPinFlow, restoreParentalFocus, settings, updateSettings]);
 
   const selectLanguage = useCallback((language: AppLanguage) => {
     window.setTimeout(() => setFocus(getLanguageFocusKey(language)), 0);
@@ -718,6 +856,23 @@ export default function SettingsScreen({
     onRefreshAccount();
     setFeedback(copy.refreshFeedback);
   }, [copy.refreshFeedback, onRefreshAccount]);
+
+  const parentalPinModalCopy = parentalPinFlow
+    ? parentalPinFlow.stage === 'verify'
+      ? {
+        title: copy.parentalVerifyPinTitle,
+        description: copy.parentalVerifyPinDescription,
+      }
+      : parentalPinFlow.stage === 'confirm'
+        ? {
+          title: copy.parentalConfirmPinTitle,
+          description: copy.parentalConfirmPinDescription,
+        }
+        : {
+          title: copy.parentalSetPinTitle,
+          description: copy.parentalSetPinDescription,
+        }
+    : null;
 
   const renderSectionContent = () => {
     if (activeSectionConfig.id === 'general') {
@@ -850,6 +1005,34 @@ export default function SettingsScreen({
       );
     }
 
+    if (activeSectionConfig.id === 'parental') {
+      return (
+        <>
+          <ActionRow
+            focusKey="settings-parental-toggle"
+            title={copy.parentalProtection}
+            description={copy.parentalProtectionDescription}
+            value={settings.parentalControlEnabled ? copy.parentalEnabled : copy.parentalDisabled}
+            tone={settings.parentalControlEnabled ? 'success' : 'default'}
+            previousFocusKey="settings-detail-back"
+            nextFocusKey="settings-parental-pin"
+            onPress={toggleParentalControl}
+          />
+          <ActionRow
+            focusKey="settings-parental-pin"
+            title={copy.parentalConfigurePin}
+            description={copy.parentalConfigurePinDescription}
+            value={isValidParentalPin(settings.parentalControlPin)
+              ? copy.parentalPinConfigured
+              : copy.parentalPinNotConfigured}
+            previousFocusKey="settings-parental-toggle"
+            nextFocusKey="settings-detail-close"
+            onPress={() => openParentalPinFlow('change')}
+          />
+        </>
+      );
+    }
+
     if (activeSectionConfig.id === 'remote') {
       return (
         <>
@@ -902,6 +1085,7 @@ export default function SettingsScreen({
   const firstActionFocusKeyBySection: Record<SettingsSection, string> = {
     general: getLanguageFocusKey(settings.language),
     player: getSelectedPlayerModeFocusKey('live'),
+    parental: 'settings-parental-toggle',
     performance: 'settings-clear-cache',
     remote: 'settings-detail-close',
     subscription: 'settings-subscription-refresh',
@@ -985,6 +1169,22 @@ export default function SettingsScreen({
           )}
         </div>
       </section>
+
+      {parentalPinFlow && parentalPinModalCopy && (
+        <ParentalPinModal
+          title={parentalPinModalCopy.title}
+          description={parentalPinModalCopy.description}
+          pin={parentalPinFlow.pin}
+          error={parentalPinFlow.error}
+          cancelLabel={appCopy[settings.language].common.cancel}
+          confirmLabel={appCopy[settings.language].common.parentalPinConfirm}
+          clearLabel={appCopy[settings.language].common.parentalPinClear}
+          backspaceLabel={appCopy[settings.language].common.parentalPinBackspace}
+          onPinChange={updateParentalPinInput}
+          onCancel={closeParentalPinFlow}
+          onConfirm={submitParentalPinFlow}
+        />
+      )}
     </FocusContext.Provider>
   );
 }

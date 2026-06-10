@@ -5,6 +5,16 @@ export type FavoriteItem = {
   name: string;
   logo?: string;
   url?: string;
+  extension?: string;
+  categoryId?: string;
+  synopsis?: string;
+  rating?: string;
+  genre?: string;
+  releaseDate?: string;
+  backdrop?: string;
+  cast?: string;
+  director?: string;
+  trailerUrl?: string;
   type: FavoriteType;
 };
 
@@ -13,6 +23,16 @@ type FavoriteInput = {
   name: string;
   logo?: string;
   url?: string;
+  extension?: string;
+  categoryId?: string;
+  synopsis?: string;
+  rating?: string;
+  genre?: string;
+  releaseDate?: string;
+  backdrop?: string;
+  cast?: string;
+  director?: string;
+  trailerUrl?: string;
 };
 
 const FAVORITE_KEYS: Record<FavoriteType, string> = {
@@ -28,6 +48,16 @@ const normalizeFavorite = (type: FavoriteType, item: FavoriteInput): FavoriteIte
   name: item.name,
   logo: item.logo,
   url: item.url,
+  extension: item.extension,
+  categoryId: item.categoryId,
+  synopsis: item.synopsis,
+  rating: item.rating,
+  genre: item.genre,
+  releaseDate: item.releaseDate,
+  backdrop: item.backdrop,
+  cast: item.cast,
+  director: item.director,
+  trailerUrl: item.trailerUrl,
   type,
 });
 
