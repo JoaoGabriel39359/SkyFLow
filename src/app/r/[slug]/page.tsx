@@ -110,7 +110,12 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
         } catch { /* silent */ }
     }, [token]);
 
-    useEffect(() => { refreshData(); }, [refreshData]);
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            refreshData();
+        }, 0);
+        return () => window.clearTimeout(timeoutId);
+    }, [refreshData]);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -125,7 +130,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
                 <main className={styles.adminMain}>
                     {activeTab === 'home'            && <Dashboard devices={devices} credits={resellerCredits} />}
                     {activeTab === 'ativar'          && <AtivarForm onSuccess={refreshData} setCredits={setResellerCredits} />}
-                    {activeTab === 'clientes'        && <ClientesTable devices={devices} />}
+                    {activeTab === 'clientes'        && <ClientesTable devices={devices} onEditSuccess={refreshData} />}
                     {activeTab === 'subrevendedores' && <SubRevendedores token={token} onCreditUpdate={refreshData} />}
                     {activeTab === 'pagamento'       && <Pagamento />}
                 </main>
@@ -155,13 +160,25 @@ export default function ResellerPortalPage() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     useEffect(() => {
-        setIsLoggedIn(!!localStorage.getItem('token'));
-        if (!slug) { setPageLoading(false); return; }
+        const timeoutId = window.setTimeout(() => {
+            setIsLoggedIn(!!localStorage.getItem('token'));
+        }, 0);
+        if (!slug) { 
+            const tId = window.setTimeout(() => {
+                setPageLoading(false);
+            }, 0);
+            return () => {
+                window.clearTimeout(timeoutId);
+                window.clearTimeout(tId);
+            };
+        }
         fetch(`http://localhost:8000/api/v1/public/${slug}/info`)
             .then(r => r.json())
             .then(data => { if (data.exists) { setExists(true); setResellerName(data.username); } })
             .catch(() => {})
             .finally(() => setPageLoading(false));
+
+        return () => window.clearTimeout(timeoutId);
     }, [slug]);
 
     const handleActivate = async (e: FormEvent) => {

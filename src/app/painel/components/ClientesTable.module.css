@@ -66,6 +66,165 @@
     color: #22c55e;
     font-size: 10px;
     font-weight: 900;
-    padding: 0.25rem 0.75rem;
     border-radius: 9999px;
+}
+
+.editBtn {
+    background: rgba(139, 92, 246, 0.1);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.editBtn:hover {
+    background: #7c3aed;
+    color: #fff;
+    border-color: #7c3aed;
+}
+
+.modalOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modalCard {
+    background: #111118;
+    border: 1.5px solid rgba(139, 92, 246, 0.25);
+    border-radius: 20px;
+    padding: 32px;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
+    box-sizing: border-box;
+}
+
+.modalTitle {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0 0 8px;
+}
+
+.modalSubtitle {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin: 0 0 24px;
+}
+
+.inputGroup {
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+.label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+}
+
+.input {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    color: #fff;
+    outline: none;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.input:focus {
+    border-color: #7c3aed;
+    background: rgba(124, 58, 237, 0.07);
+}
+
+.inputRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.modalActions {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.btnCancel {
+    flex: 1;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: #9ca3af;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btnCancel:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+.btnSubmit {
+    flex: 2;
+    padding: 12px;
+    background: linear-gradient(135deg, #7c3aed, #2563eb);
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btnSubmit:hover:not(:disabled) {
+    box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
+}
+
+.btnSubmit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.statusMessage {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+    text-align: center;
+    font-weight: 600;
+}
+
+.success {
+    background: rgba(52, 211, 153, 0.1);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.error {
+    background: rgba(248, 113, 113, 0.1);
+    color: #f87171;
+    border: 1px solid rgba(248, 113, 113, 0.3);
 }
