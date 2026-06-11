@@ -131,7 +131,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
                 <main className={styles.adminMain}>
                     {activeTab === 'home'            && <Dashboard devices={devices} credits={resellerCredits} />}
                     {activeTab === 'ativar'          && <AtivarForm onSuccess={refreshData} setCredits={setResellerCredits} />}
-                    {activeTab === 'clientes'        && <ClientesTable devices={devices} />}
+                    {activeTab === 'clientes'        && <ClientesTable devices={devices} onEditSuccess={refreshData} />}
                     {activeTab === 'subrevendedores' && <SubRevendedores token={token} onCreditUpdate={refreshData} />}
                     {activeTab === 'pagamento'       && <Pagamento />}
                 </main>

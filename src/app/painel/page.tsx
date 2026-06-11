@@ -65,7 +65,7 @@ export default function PainelRevendedor() {
                 <div className={styles.content}>
                     {activeTab === 'home' && <Dashboard devices={devices} credits={resellerCredits} />}
                     {activeTab === 'ativar' && <AtivarForm onSuccess={refreshData} setCredits={setResellerCredits} />}
-                    {activeTab === 'clientes' && <ClientesTable devices={devices} />}
+                    {activeTab === 'clientes' && <ClientesTable devices={devices} onEditSuccess={refreshData} />}
                     {activeTab === 'subrevendedores' && <SubRevendedores token={localStorage.getItem('token')} onCreditUpdate={refreshData} />}
                     {activeTab === 'pagamento' && <Pagamento />}
                 </div>
