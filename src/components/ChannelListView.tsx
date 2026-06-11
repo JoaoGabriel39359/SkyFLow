@@ -15,6 +15,7 @@ import type { EpgProgram, XtreamCredentials } from '@/lib/epg';
 import { useMediaDetails } from '@/hooks/useMediaDetails';
 import type { MediaDetails, MediaDetailsType } from '@/lib/mediaDetails';
 import type { PlayerMode } from '@/lib/playerSettings';
+import { getChannelLogoBrand } from '@/lib/channelLogos';
 import styles from './ChannelListView.module.css';
 
 export type ChannelListViewChannel = {
@@ -174,9 +175,14 @@ function isLikelyImgurUnavailableImage(logo: string, width: number, height: numb
   try {
     const { hostname } = new URL(logo);
     const isImgurImage = hostname.toLowerCase().includes('imgur.com');
-    const isSmallWidePlaceholder = width <= 220 && height <= 130 && width / height > 1.45;
+    const isKnownImgurMissingPlaceholder =
+      width >= 150 &&
+      width <= 180 &&
+      height >= 75 &&
+      height <= 95 &&
+      width / height > 1.75;
 
-    return isImgurImage && isSmallWidePlaceholder;
+    return isImgurImage && isKnownImgurMissingPlaceholder;
   } catch {
     return false;
   }
@@ -231,7 +237,7 @@ function ChannelLogoContent({
         <img
           src={logo}
           alt=""
-          loading="lazy"
+          loading="eager"
           decoding="async"
           onError={() => setFallback(true)}
           onLoad={(event) => {
@@ -243,10 +249,26 @@ function ChannelLogoContent({
           }}
         />
       ) : (
-        <span className={styles.logoFallbackText}>{name}</span>
+        <ChannelLogoFallback name={name} />
       )}
     </span>
   );
+}
+
+function ChannelLogoFallback({ name }: { name: string }) {
+  const brand = getChannelLogoBrand(name);
+
+  if (brand) {
+    const brandClassName = styles[`logoBrand_${brand.key}`] ?? '';
+
+    return (
+      <span className={`${styles.logoFallbackBrand} ${brandClassName}`}>
+        {brand.label}
+      </span>
+    );
+  }
+
+  return <span className={styles.logoFallbackText}>{name}</span>;
 }
 
 function HeaderButton({
@@ -376,7 +398,11 @@ function LivePreviewPlayer({
     let hls: Hls | null = null;
     let triedHls = false;
     let triedNative = false;
+    let hlsNetworkRetries = 0;
+    let hlsMediaRetries = 0;
+    let nativeErrorFallbackUsed = false;
     let cancelled = false;
+    const hlsRetryTimeouts: number[] = [];
     const video = videoRef.current;
     const url = channel.url || '';
 
@@ -399,6 +425,8 @@ function LivePreviewPlayer({
     };
 
     const destroyHls = () => {
+      hlsRetryTimeouts.splice(0).forEach((timeoutId) => window.clearTimeout(timeoutId));
+
       if (hls) {
         hls.destroy();
         hls = null;
@@ -445,7 +473,22 @@ function LivePreviewPlayer({
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, playVideo);
       hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal) return;
+        if (!data.fatal || !hls) return;
+
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && hlsNetworkRetries < 3) {
+          hlsNetworkRetries += 1;
+          const timeoutId = window.setTimeout(() => {
+            hls?.startLoad();
+          }, 450 * hlsNetworkRetries);
+          hlsRetryTimeouts.push(timeoutId);
+          return;
+        }
+
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && hlsMediaRetries < 2) {
+          hlsMediaRetries += 1;
+          hls.recoverMediaError();
+          return;
+        }
 
         if (playerMode === 'auto' && !triedNative) {
           startNativePlayback();
@@ -457,7 +500,14 @@ function LivePreviewPlayer({
     };
 
     const handleVideoError = () => {
-      if (playerMode === 'auto' && !triedHls && !isDirectVideoFile) {
+      if (
+        !nativeErrorFallbackUsed &&
+        !triedHls &&
+        !isDirectVideoFile &&
+        (playerMode === 'auto' || playerMode === 'native') &&
+        (isHlsStream || Hls.isSupported())
+      ) {
+        nativeErrorFallbackUsed = true;
         startHlsPlayback();
         return;
       }
@@ -480,7 +530,11 @@ function LivePreviewPlayer({
       startNativePlayback();
     } else if (playerMode === 'hls') {
       startHlsPlayback();
-    } else if (nativeHlsSupport || isDirectVideoFile) {
+    } else if (isDirectVideoFile) {
+      startNativePlayback();
+    } else if (isHlsStream && Hls.isSupported() && !nativeHlsSupport) {
+      startHlsPlayback();
+    } else if (nativeHlsSupport) {
       startNativePlayback();
     } else if (isHlsStream || Hls.isSupported()) {
       startHlsPlayback();

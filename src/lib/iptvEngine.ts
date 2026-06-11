@@ -11,19 +11,19 @@ async function readProxyJson(proxyUrl: string, fallbackValue: unknown) {
   const responseText = await response.text();
 
   if (!response.ok) {
-    console.error(`Proxy respondeu com status ${response.status}:`, responseText.slice(0, 180));
+    console.warn(`Proxy respondeu com status ${response.status}:`, responseText.slice(0, 180));
     return fallbackValue;
   }
 
   if (!contentType.includes('application/json')) {
-    console.error('Proxy retornou resposta nao-JSON:', responseText.slice(0, 180));
+    console.warn('Proxy retornou resposta nao-JSON:', responseText.slice(0, 180));
     return fallbackValue;
   }
 
   try {
     return JSON.parse(responseText);
   } catch (error) {
-    console.error('Erro ao interpretar JSON do proxy:', error, responseText.slice(0, 180));
+    console.warn('Erro ao interpretar JSON do proxy:', error, responseText.slice(0, 180));
     return fallbackValue;
   }
 }
@@ -51,7 +51,7 @@ export async function getCategories(baseUrl: string, user: string, pass: string,
   try {
     return await readProxyJson(proxyUrl, []);
   } catch (error) {
-    console.error(`Erro ao buscar categorias (${action}):`, error);
+    console.warn(`Erro ao buscar categorias (${action}):`, error);
     return [];
   }
 }
@@ -65,7 +65,7 @@ export async function getStreams(baseUrl: string, user: string, pass: string, ac
   try {
     return await readProxyJson(proxyUrl, []);
   } catch (error) {
-    console.error(`Erro ao buscar streams (${action}):`, error);
+    console.warn(`Erro ao buscar streams (${action}):`, error);
     return [];
   }
 }

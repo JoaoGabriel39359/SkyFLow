@@ -3,7 +3,14 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import VideoPlayer from '@/components/VideoPlayer';
-import MainMenu, { MainMenuSection } from '@/components/MainMenu';
+import ExploreHome, { type ExploreMediaSection } from '@/components/ExploreHome';
+import MediaCategoryRails, {
+  type MediaCategoryRailData,
+  type MediaCategoryRailsSection,
+} from '@/components/MediaCategoryRails';
+import MediaFullscreenDetails from '@/components/MediaFullscreenDetails';
+import SeriesEpisodeBrowser from '@/components/SeriesEpisodeBrowser';
+import type { MainMenuSection } from '@/components/MainMenu';
 import SettingsScreen from '@/components/SettingsScreen';
 import CategoryGrid, { getCategoryFocusKey, MediaCategory } from '@/components/CategoryGrid';
 import ParentalPinModal from '@/components/ParentalPinModal';
@@ -17,6 +24,7 @@ import { getFavoriteIds, getFavorites, toggleFavorite } from '@/lib/favorites';
 import { appCopy, type AppLanguage } from '@/lib/i18n';
 import { DEFAULT_APP_SETTINGS, getAppSettings, saveAppSettings, type AppSettings } from '@/lib/settings';
 import { isRestrictedCategoryName, isValidParentalPin } from '@/lib/parentalControl';
+import { getLiveWatchHistory, recordLiveWatch } from '@/lib/watchHistory';
 import { init, setFocus, useFocusable, FocusContext } from '@noriginmedia/norigin-spatial-navigation';
 
 init({
@@ -30,9 +38,23 @@ type ActionParams = {
   type: 'live' | 'vod' | 'series';
 };
 
+type ExploreDetailsState = {
+  section: Exclude<ExploreMediaSection, 'live'>;
+  item: ChannelListViewChannel;
+  focusKey: string;
+};
+
+type SeriesBrowserState = {
+  series: ChannelListViewChannel;
+  returnFocusKey: string;
+};
+
 const CONTENT_BATCH_SIZE = 60;
 const CATEGORY_CONTENT_CACHE_LIMIT = 6;
+const EXPLORE_HISTORY_LIMIT = 15;
+const MEDIA_RAIL_CATEGORY_BATCH_SIZE = 10;
 type MediaSection = Exclude<MainMenuSection, 'settings'>;
+type MediaRailsState = Record<MediaCategoryRailsSection, MediaCategoryRailData[]>;
 
 function getCachedCategoryContent(
   cache: Map<string, ChannelListViewChannel[]>,
@@ -80,6 +102,32 @@ const getCurrentMediaKey = (tab: string): MediaSection => {
   return 'live';
 };
 
+const normalizeCategoryName = (name: string) => (
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+);
+
+const getExploreCategory = (section: MediaSection, categories: any[]) => {
+  if (section !== 'movies' && section !== 'series') return categories[0];
+
+  const launch2026Category = categories.find((category) => {
+    const normalizedName = normalizeCategoryName(String(category.category_name || ''));
+    return (
+      normalizedName.includes('lancamento') &&
+      normalizedName.includes('2026')
+    );
+  });
+
+  if (launch2026Category) return launch2026Category;
+
+  return categories.find((category) => {
+    const normalizedName = normalizeCategoryName(String(category.category_name || ''));
+    return normalizedName.includes('2026') || normalizedName.includes('lancamento');
+  }) ?? categories[0];
+};
+
 const emptyFavoriteIds: Record<MediaSection, string[]> = {
   live: [],
   movies: [],
@@ -96,6 +144,181 @@ const emptySearchLoading: Record<MediaSection, boolean> = {
   live: false,
   movies: false,
   series: false,
+};
+
+const emptyExploreItems: Record<MediaSection, ChannelListViewChannel[]> = {
+  live: [],
+  movies: [],
+  series: [],
+};
+
+const emptyMediaRails: MediaRailsState = {
+  movies: [],
+  series: [],
+};
+
+const getMediaRailPriority = (categoryName: string) => {
+  const normalizedName = normalizeCategoryName(categoryName);
+
+  if (normalizedName.includes('lancamento') && normalizedName.includes('2026')) return 0;
+  if (normalizedName.includes('lancamento')) return 1;
+  if (normalizedName.includes('2026')) return 2;
+  if (normalizedName.includes('4k')) return 3;
+  if (normalizedName.includes('acao') || normalizedName.includes('aventura')) return 4;
+  if (normalizedName.includes('comedia')) return 5;
+  if (normalizedName.includes('terror') || normalizedName.includes('suspense') || normalizedName.includes('thriller')) return 6;
+  if (normalizedName.includes('drama')) return 7;
+  if (normalizedName.includes('infantil') || normalizedName.includes('kids')) return 8;
+
+  return 20;
+};
+
+const LOGO_MISSING_MARKERS = [
+  'no-logo',
+  'no_logo',
+  'nologo',
+  'noimage',
+  'no-image',
+  'notfound',
+  'not-found',
+  'placeholder',
+  'unavailable',
+  'sem-logo',
+  'sem_logo',
+];
+
+const CHANNEL_LOGO_BRANDS = [
+  ['sportv', 'sport tv', 'sport-tv'],
+  ['espn'],
+  ['premiere', 'premier'],
+  ['combate'],
+  ['globo'],
+  ['record'],
+  ['sbt'],
+  ['band'],
+  ['cnn'],
+  ['bandnews', 'band news'],
+  ['globonews', 'globo news'],
+  ['telecine'],
+  ['hbo'],
+  ['cinemax'],
+  ['discovery'],
+  ['history'],
+  ['a&e', 'ae'],
+  ['amc'],
+  ['sony'],
+  ['warner'],
+  ['tnt'],
+  ['disney'],
+  ['cartoon'],
+  ['nick'],
+  ['multishow'],
+  ['gnt'],
+  ['bis'],
+  ['megapix'],
+  ['universal'],
+  ['paramount'],
+  ['animal planet'],
+  ['national geographic', 'nat geo'],
+] as const;
+
+const normalizeLogoLookupText = (value: string) => (
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰]/g, '')
+    .replace(/\[[^\]]*]/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\b\d{1,2}[:h]\d{2}\b/g, ' ')
+    .replace(/\b(4k|fhd|fullhd|full hd|hd|sd|uhd|h265|hevc|h\.265|backup|raw)\b/g, ' ')
+    .replace(/[^a-z0-9&+]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+);
+
+const hasUsableChannelLogo = (logo?: string) => {
+  if (!logo?.trim()) return false;
+
+  try {
+    const normalizedLogo = decodeURIComponent(logo).toLowerCase();
+    return !LOGO_MISSING_MARKERS.some((marker) => normalizedLogo.includes(marker));
+  } catch {
+    return true;
+  }
+};
+
+const getLogoBrandKey = (value: string) => {
+  const normalizedValue = normalizeLogoLookupText(value);
+
+  if (!normalizedValue) return '';
+
+  const normalizedCompactValue = normalizedValue.replace(/\s+/g, '');
+
+  const matchedBrand = CHANNEL_LOGO_BRANDS.find((aliases) =>
+    aliases.some((alias) => {
+      const normalizedAlias = normalizeLogoLookupText(alias);
+      const normalizedCompactAlias = normalizedAlias.replace(/\s+/g, '');
+
+      return (
+        normalizedValue.includes(normalizedAlias) ||
+        normalizedCompactValue.includes(normalizedCompactAlias)
+      );
+    })
+  );
+
+  return matchedBrand?.[0] ?? '';
+};
+
+const createLogoLookup = (channels: ChannelListViewChannel[]) => {
+  const byId = new Map<string, string>();
+  const byName = new Map<string, string>();
+  const byBrand = new Map<string, string>();
+
+  channels.forEach((channel) => {
+    if (!hasUsableChannelLogo(channel.logo)) return;
+
+    byId.set(String(channel.id), channel.logo);
+
+    const nameKey = normalizeLogoLookupText(channel.name);
+    if (nameKey && !byName.has(nameKey)) {
+      byName.set(nameKey, channel.logo);
+    }
+
+    const brandFromName = getLogoBrandKey(channel.name);
+    if (brandFromName && !byBrand.has(brandFromName)) {
+      byBrand.set(brandFromName, channel.logo);
+    }
+
+    const brandFromLogo = getLogoBrandKey(channel.logo);
+    if (brandFromLogo && !byBrand.has(brandFromLogo)) {
+      byBrand.set(brandFromLogo, channel.logo);
+    }
+  });
+
+  return { byId, byName, byBrand };
+};
+
+const enrichChannelsWithCatalogLogos = (
+  channels: ChannelListViewChannel[],
+  catalogChannels: ChannelListViewChannel[]
+) => {
+  if (channels.length === 0 || catalogChannels.length === 0) return channels;
+
+  const lookup = createLogoLookup(catalogChannels);
+
+  return channels.map((channel) => {
+    if (hasUsableChannelLogo(channel.logo)) return channel;
+
+    const nameKey = normalizeLogoLookupText(channel.name);
+    const brandKey = getLogoBrandKey(channel.name);
+    const enrichedLogo =
+      lookup.byId.get(String(channel.id)) ||
+      (nameKey ? lookup.byName.get(nameKey) : '') ||
+      (brandKey ? lookup.byBrand.get(brandKey) : '');
+
+    return enrichedLogo ? { ...channel, logo: enrichedLogo } : channel;
+  });
 };
 
 const getStreamExtensionFromUrl = (url?: string) => {
@@ -148,6 +371,23 @@ const mapStreamToChannel = (
     trailerUrl: trailerUrl ? String(trailerUrl) : '',
   };
 };
+
+const mapFavoriteToChannel = (favorite: ReturnType<typeof getFavorites>[number]): ChannelListViewChannel => ({
+  id: String(favorite.id),
+  name: favorite.name,
+  logo: favorite.logo || '',
+  url: favorite.url,
+  extension: favorite.extension,
+  categoryId: favorite.categoryId,
+  synopsis: favorite.synopsis,
+  rating: favorite.rating,
+  genre: favorite.genre,
+  releaseDate: favorite.releaseDate,
+  backdrop: favorite.backdrop,
+  cast: favorite.cast,
+  director: favorite.director,
+  trailerUrl: favorite.trailerUrl,
+});
 
 type LogoutConfirmModalProps = {
   language: AppLanguage;
@@ -253,21 +493,40 @@ export default function Home() {
   const [canScrollDown, setCanScrollDown] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
-  const [mainMenuFocusKey, setMainMenuFocusKey] = useState('main-menu-live');
+  const [, setMainMenuFocusKey] = useState('explore-quick-live');
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [loadedCategories, setLoadedCategories] = useState<any[]>([]);
   const [allCategoryChannels, setAllCategoryChannels] = useState<ChannelListViewChannel[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<MediaCategory | null>(null);
+  const [mediaRailsSection, setMediaRailsSection] = useState<MediaCategoryRailsSection | null>(null);
+  const [mediaRailsByType, setMediaRailsByType] = useState<MediaRailsState>(emptyMediaRails);
+  const [isMediaRailsLoadingByType, setIsMediaRailsLoadingByType] = useState<Record<MediaCategoryRailsSection, boolean>>({
+    movies: false,
+    series: false,
+  });
+  const [exploreDetails, setExploreDetails] = useState<ExploreDetailsState | null>(null);
+  const [seriesBrowser, setSeriesBrowser] = useState<SeriesBrowserState | null>(null);
+  const [activePlayerMediaKey, setActivePlayerMediaKey] = useState<MediaSection | null>(null);
+  const [playerQueue, setPlayerQueue] = useState<ChannelListViewChannel[]>([]);
+  const [lastSeriesEpisodeFocusKey, setLastSeriesEpisodeFocusKey] = useState('');
   const [favoriteIdsByType, setFavoriteIdsByType] = useState<Record<MediaSection, string[]>>(emptyFavoriteIds);
   const [favoriteFeedback, setFavoriteFeedback] = useState('');
   const [searchCatalogByType, setSearchCatalogByType] = useState<Record<MediaSection, ChannelListViewChannel[]>>(emptySearchCatalog);
   const [isSearchCatalogLoadingByType, setIsSearchCatalogLoadingByType] = useState<Record<MediaSection, boolean>>(emptySearchLoading);
+  const [exploreItemsByType, setExploreItemsByType] = useState<Record<MediaSection, ChannelListViewChannel[]>>(emptyExploreItems);
+  const [isExploreLoading, setIsExploreLoading] = useState(false);
   const [pendingRestrictedCategory, setPendingRestrictedCategory] = useState<MediaCategory | null>(null);
   const [restrictedCategoryPin, setRestrictedCategoryPin] = useState('');
   const [restrictedCategoryError, setRestrictedCategoryError] = useState('');
   const hasSetInitialFocus = useRef(false);
   const categoryContentCache = useRef(new Map<string, ChannelListViewChannel[]>());
   const searchCatalogCache = useRef(new Map<string, ChannelListViewChannel[]>());
+  const exploreContentCache = useRef(new Map<string, ChannelListViewChannel[]>());
+  const mediaRailsCache = useRef(new Map<string, MediaCategoryRailData[]>());
+  const liveLogoCatalog = useRef<ChannelListViewChannel[] | null>(null);
+  const liveLogoCatalogPromise = useRef<Promise<ChannelListViewChannel[]> | null>(null);
+  const isOpeningExploreItem = useRef(false);
+  const lastRecordedLiveWatchId = useRef<string | null>(null);
   const copy = appCopy[appSettings.language];
 
   const checkDeviceSecurity = useCallback(async () => {
@@ -320,6 +579,10 @@ export default function Home() {
         movies: getFavoriteIds('movies'),
         series: getFavoriteIds('series'),
       });
+      setExploreItemsByType((previousItems) => ({
+        ...previousItems,
+        live: getLiveWatchHistory().slice(0, EXPLORE_HISTORY_LIMIT),
+      }));
     }, 0);
 
     return () => window.clearTimeout(timeout);
@@ -348,6 +611,11 @@ export default function Home() {
       }, 0);
 
       return () => window.clearTimeout(timeout);
+    }
+
+    if (isOpeningExploreItem.current) {
+      isOpeningExploreItem.current = false;
+      return;
     }
 
     let isCancelled = false;
@@ -389,6 +657,133 @@ export default function Home() {
   }, [activeTab, credentials, isLoggedIn]);
 
   useEffect(() => {
+    if (!isLoggedIn || !credentials || activeTab !== 'home') return;
+
+    let isCancelled = false;
+    const sections: MediaSection[] = ['live', 'movies', 'series'];
+
+    const loadExploreSection = async (section: MediaSection) => {
+      const params = getActionParams(section);
+
+      if (section === 'live') {
+        const liveHistory = getLiveWatchHistory().slice(0, EXPLORE_HISTORY_LIMIT);
+
+        const cacheKey = `explore:${params.type}:all:${appSettings.parentalControlEnabled ? 'parental-on' : 'parental-off'}`;
+        const cachedChannels = exploreContentCache.current.get(cacheKey);
+
+        if (cachedChannels) {
+          liveLogoCatalog.current = cachedChannels;
+
+          if (liveHistory.length === 0) return cachedChannels;
+
+          const historyIds = new Set(liveHistory.map((channel) => channel.id));
+          return [
+            ...liveHistory,
+            ...cachedChannels.filter((channel) => !historyIds.has(channel.id)),
+          ].slice(0, EXPLORE_HISTORY_LIMIT);
+        }
+
+        const rawCategories = appSettings.parentalControlEnabled
+          ? await getCategories(credentials.url, credentials.user, credentials.pass, params.cat)
+          : [];
+        const blockedCategoryIds = new Set(
+          Array.isArray(rawCategories)
+            ? rawCategories
+              .filter((category: any) => isRestrictedCategoryName(category.category_name || ''))
+              .map((category: any) => String(category.category_id))
+            : []
+        );
+        const streams = await getStreams(
+          credentials.url,
+          credentials.user,
+          credentials.pass,
+          params.stream
+        );
+        const channels: ChannelListViewChannel[] = Array.isArray(streams)
+          ? streams
+            .filter((stream: any) => !blockedCategoryIds.has(String(stream.category_id)))
+            .map((stream: any) => mapStreamToChannel(stream, params, credentials))
+          : [];
+
+        liveLogoCatalog.current = channels;
+        exploreContentCache.current.set(cacheKey, channels);
+
+        if (liveHistory.length === 0) {
+          return channels;
+        }
+
+        const historyIds = new Set(liveHistory.map((channel) => channel.id));
+        return [
+          ...liveHistory,
+          ...channels.filter((channel) => !historyIds.has(channel.id)),
+        ].slice(0, EXPLORE_HISTORY_LIMIT);
+      }
+
+      const cacheKey = `explore:${params.type}:launch-2026:${appSettings.parentalControlEnabled ? 'parental-on' : 'parental-off'}`;
+      const cachedChannels = exploreContentCache.current.get(cacheKey);
+
+      if (cachedChannels) return cachedChannels;
+
+      const rawCategories = await getCategories(credentials.url, credentials.user, credentials.pass, params.cat);
+      const visibleCategories = Array.isArray(rawCategories)
+        ? rawCategories.filter((category: any) => (
+          !appSettings.parentalControlEnabled ||
+          !isRestrictedCategoryName(category.category_name || '')
+        ))
+        : [];
+      const sampleCategory = getExploreCategory(section, visibleCategories);
+
+      if (!sampleCategory?.category_id) return [];
+
+      const sampleCategoryId = String(sampleCategory.category_id);
+      const streams = await getStreams(
+        credentials.url,
+        credentials.user,
+        credentials.pass,
+        params.stream,
+        sampleCategoryId
+      );
+      const channels: ChannelListViewChannel[] = Array.isArray(streams)
+        ? streams
+          .map((stream: any) => mapStreamToChannel(stream, params, credentials, sampleCategoryId))
+        : [];
+
+      exploreContentCache.current.set(cacheKey, channels);
+      return channels;
+    };
+
+    const loadExploreContent = async () => {
+      setIsExploreLoading(true);
+
+      try {
+        const [live, movies, series] = await Promise.all(
+          sections.map((section) => loadExploreSection(section))
+        );
+
+        if (!isCancelled) {
+          setExploreItemsByType({ live, movies, series });
+        }
+      } catch (error) {
+        console.error('Erro ao carregar destaques da tela inicial:', error);
+
+        if (!isCancelled) {
+          setExploreItemsByType(emptyExploreItems);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsExploreLoading(false);
+        }
+      }
+    };
+
+    loadExploreContent();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeTab, appSettings.parentalControlEnabled, credentials, isLoggedIn]);
+
+  useEffect(() => {
     const checkCanScrollDown = () => {
       const pageHeight = document.documentElement.scrollHeight;
       const screenHeight = window.innerHeight;
@@ -422,7 +817,7 @@ export default function Home() {
   useEffect(() => {
     if (!hasSetInitialFocus.current && !isInitialLoading && isLoggedIn && !isBlocked) {
       hasSetInitialFocus.current = true;
-      setFocus('main-menu-live');
+      setFocus('explore-quick-live');
     }
   }, [isBlocked, isInitialLoading, isLoggedIn]);
 
@@ -430,13 +825,25 @@ export default function Home() {
     setIsLogoutConfirmOpen(false);
     localStorage.removeItem('skyflow_device_id');
     hasSetInitialFocus.current = false;
+    lastRecordedLiveWatchId.current = null;
     setSelectedChannel(null);
-    setMainMenuFocusKey('main-menu-live');
+    setActivePlayerMediaKey(null);
+    setPlayerQueue([]);
+    setSeriesBrowser(null);
+    setLastSeriesEpisodeFocusKey('');
+    setExploreDetails(null);
+    setMediaRailsSection(null);
+    setMainMenuFocusKey('explore-quick-live');
     setActiveTab('home');
     setAllCategories([]);
     setLoadedCategories([]);
     setAllCategoryChannels([]);
     setSelectedCategory(null);
+    setExploreDetails(null);
+    setSeriesBrowser(null);
+    setActivePlayerMediaKey(null);
+    setPlayerQueue([]);
+    setLastSeriesEpisodeFocusKey('');
     setPreviewChannel(null);
     setPreparedPreviewChannelId(null);
     setPendingRestrictedCategory(null);
@@ -445,9 +852,15 @@ export default function Home() {
     setIsLoadingCategories(false);
     setCanScrollDown(false);
     setSearchCatalogByType(emptySearchCatalog);
+    setExploreItemsByType(emptyExploreItems);
+    setMediaRailsByType(emptyMediaRails);
     setIsSearchCatalogLoadingByType(emptySearchLoading);
     categoryContentCache.current.clear();
     searchCatalogCache.current.clear();
+    exploreContentCache.current.clear();
+    mediaRailsCache.current.clear();
+    liveLogoCatalog.current = null;
+    liveLogoCatalogPromise.current = null;
     checkDeviceSecurity();
   }, [checkDeviceSecurity]);
 
@@ -458,17 +871,13 @@ export default function Home() {
   const handleCloseLogoutConfirm = useCallback(() => {
     setIsLogoutConfirmOpen(false);
     window.setTimeout(() => {
-      setFocus(activeTab === 'home' ? 'main-menu-logout' : 'settings-logout');
+      setFocus(activeTab === 'home' ? 'explore-logout' : 'settings-logout');
     }, 0);
   }, [activeTab]);
 
-  const handleMainMenuSelect = useCallback((section: MainMenuSection) => {
-    setMainMenuFocusKey(`main-menu-${section}`);
-    setActiveTab(section);
-  }, []);
-
   const handleBackToMainMenu = useCallback(() => {
-    setMainMenuFocusKey('main-menu-live');
+    setMainMenuFocusKey('explore-quick-live');
+    setMediaRailsSection(null);
     setActiveTab('home');
     setAllCategories([]);
     setLoadedCategories([]);
@@ -479,25 +888,43 @@ export default function Home() {
     setPendingRestrictedCategory(null);
     setRestrictedCategoryPin('');
     setRestrictedCategoryError('');
-    window.setTimeout(() => setFocus('main-menu-live'), 0);
+    window.setTimeout(() => setFocus('explore-quick-live'), 0);
   }, []);
 
   const handleBackFromSettings = useCallback(() => {
-    setMainMenuFocusKey('main-menu-settings');
+    setMainMenuFocusKey('explore-quick-settings');
+    setMediaRailsSection(null);
     setActiveTab('home');
   }, []);
+
+  const handleBackFromMediaRails = useCallback(() => {
+    const focusKey = mediaRailsSection ? `explore-quick-${mediaRailsSection}` : 'explore-quick-live';
+    setMediaRailsSection(null);
+    setActiveTab('home');
+    window.setTimeout(() => setFocus(focusKey), 0);
+  }, [mediaRailsSection]);
 
   const handleSettingsChange = useCallback((nextSettings: AppSettings) => {
     setAppSettings(nextSettings);
     saveAppSettings(nextSettings);
     searchCatalogCache.current.clear();
+    mediaRailsCache.current.clear();
+    liveLogoCatalog.current = null;
+    liveLogoCatalogPromise.current = null;
     setSearchCatalogByType(emptySearchCatalog);
+    setMediaRailsByType(emptyMediaRails);
   }, []);
 
   const handleClearCatalogCache = useCallback(() => {
     categoryContentCache.current.clear();
     searchCatalogCache.current.clear();
+    exploreContentCache.current.clear();
+    mediaRailsCache.current.clear();
+    liveLogoCatalog.current = null;
+    liveLogoCatalogPromise.current = null;
     setSearchCatalogByType(emptySearchCatalog);
+    setExploreItemsByType(emptyExploreItems);
+    setMediaRailsByType(emptyMediaRails);
   }, []);
 
   const handleBackToCategories = useCallback(() => {
@@ -506,10 +933,13 @@ export default function Home() {
     setSelectedCategory(null);
     setPreviewChannel(null);
     setPreparedPreviewChannelId(null);
+    setSeriesBrowser(null);
+    setPlayerQueue([]);
+    setLastSeriesEpisodeFocusKey('');
     window.setTimeout(() => setFocus('category-grid-back'), 0);
   }, []);
 
-  const currentMediaKey = getCurrentMediaKey(activeTab);
+  const currentMediaKey = mediaRailsSection ?? getCurrentMediaKey(activeTab);
 
   const categoryGridItems: MediaCategory[] = useMemo(() => {
     const mappedCategories = allCategories.map((category) => ({
@@ -532,6 +962,197 @@ export default function Home() {
       .filter((category) => isRestrictedCategoryName(category.category_name || ''))
       .map((category) => String(category.category_id))
   ), [allCategories]);
+
+  const loadLiveLogoCatalog = useCallback(async () => {
+    if (!credentials) return [];
+    if (liveLogoCatalog.current) return liveLogoCatalog.current;
+    if (liveLogoCatalogPromise.current) return liveLogoCatalogPromise.current;
+
+    const params = getActionParams('live');
+    const cacheSuffix = appSettings.parentalControlEnabled ? 'parental-on' : 'parental-off';
+    const cachedCatalog =
+      exploreContentCache.current.get(`explore:${params.type}:all:${cacheSuffix}`) ||
+      searchCatalogCache.current.get(`search:${params.type}:${cacheSuffix}`);
+
+    if (cachedCatalog) {
+      liveLogoCatalog.current = cachedCatalog;
+      return cachedCatalog;
+    }
+
+    liveLogoCatalogPromise.current = getStreams(
+      credentials.url,
+      credentials.user,
+      credentials.pass,
+      params.stream
+    )
+      .then((streams) => {
+        const visibleStreams =
+          Array.isArray(streams) && appSettings.parentalControlEnabled
+            ? streams.filter((stream: any) => !restrictedCategoryIds.has(String(stream.category_id)))
+            : streams;
+        const channels: ChannelListViewChannel[] = Array.isArray(visibleStreams)
+          ? visibleStreams.map((stream: any) => mapStreamToChannel(stream, params, credentials))
+          : [];
+
+        liveLogoCatalog.current = channels;
+        return channels;
+      })
+      .catch((error) => {
+        console.error('Erro ao carregar catalogo de logos dos canais:', error);
+        return [];
+      })
+      .finally(() => {
+        liveLogoCatalogPromise.current = null;
+      });
+
+    return liveLogoCatalogPromise.current;
+  }, [appSettings.parentalControlEnabled, credentials, restrictedCategoryIds]);
+
+  const loadMediaRails = useCallback(async (section: MediaCategoryRailsSection) => {
+    if (!credentials || isMediaRailsLoadingByType[section]) return;
+
+    const params = getActionParams(section);
+    const cacheKey = `media-rails:${params.type}:${appSettings.parentalControlEnabled ? 'parental-on' : 'parental-off'}`;
+    const cachedRails = mediaRailsCache.current.get(cacheKey);
+
+    if (cachedRails) {
+      setMediaRailsByType((previousRails) => ({
+        ...previousRails,
+        [section]: cachedRails,
+      }));
+      return;
+    }
+
+    setIsMediaRailsLoadingByType((previousLoading) => ({
+      ...previousLoading,
+      [section]: true,
+    }));
+
+    try {
+      const rawCategories = await getCategories(credentials.url, credentials.user, credentials.pass, params.cat);
+      const visibleCategories = Array.isArray(rawCategories)
+        ? rawCategories
+          .filter((category: any) => (
+            !appSettings.parentalControlEnabled ||
+            !isRestrictedCategoryName(category.category_name || '')
+          ))
+          .sort((leftCategory: any, rightCategory: any) => (
+            getMediaRailPriority(String(leftCategory.category_name || '')) -
+              getMediaRailPriority(String(rightCategory.category_name || ''))
+          ))
+        : [];
+      const favoriteItems = getFavorites(section)
+        .filter((favorite) => (
+          !appSettings.parentalControlEnabled ||
+          !isRestrictedCategoryName(favorite.name)
+        ))
+        .map(mapFavoriteToChannel);
+      const favoriteRail: MediaCategoryRailData[] = favoriteItems.length > 0
+        ? [{
+          id: `${section}-favorites`,
+          title: copy.media.favorites,
+          items: favoriteItems,
+          kind: 'favorites',
+        }]
+        : [];
+      const loadCategoryRail = async (category: any): Promise<MediaCategoryRailData | null> => {
+        try {
+          const categoryId = String(category.category_id);
+          const streams = await getStreams(
+            credentials.url,
+            credentials.user,
+            credentials.pass,
+            params.stream,
+            categoryId
+          );
+          const items: ChannelListViewChannel[] = Array.isArray(streams)
+            ? streams.map((stream: any) => mapStreamToChannel(stream, params, credentials, categoryId))
+            : [];
+
+          return {
+            id: `${section}-${categoryId}`,
+            title: String(category.category_name || 'Sem nome'),
+            items,
+            kind: 'category' as const,
+          } satisfies MediaCategoryRailData;
+        } catch (error) {
+          console.error('Erro ao carregar trilho de midia:', error);
+          return null;
+        }
+      };
+      const loadedCategoryRails: MediaCategoryRailData[] = [];
+
+      for (let index = 0; index < visibleCategories.length; index += MEDIA_RAIL_CATEGORY_BATCH_SIZE) {
+        const categoryRails = await Promise.all(
+          visibleCategories
+            .slice(index, index + MEDIA_RAIL_CATEGORY_BATCH_SIZE)
+            .map(loadCategoryRail)
+        );
+        loadedCategoryRails.push(
+          ...categoryRails.filter((rail): rail is MediaCategoryRailData => Boolean(rail?.items.length))
+        );
+
+        const partialRails = [
+          ...favoriteRail,
+          ...loadedCategoryRails,
+        ];
+
+        if (partialRails.length > 0) {
+          setMediaRailsByType((previousRails) => ({
+            ...previousRails,
+            [section]: partialRails,
+          }));
+        }
+      }
+
+      const rails = [
+        ...favoriteRail,
+        ...loadedCategoryRails,
+      ];
+
+      mediaRailsCache.current.set(cacheKey, rails);
+      setMediaRailsByType((previousRails) => ({
+        ...previousRails,
+        [section]: rails,
+      }));
+    } catch (error) {
+      console.error('Erro ao carregar trilhos de midia:', error);
+      setMediaRailsByType((previousRails) => ({
+        ...previousRails,
+        [section]: [],
+      }));
+    } finally {
+      setIsMediaRailsLoadingByType((previousLoading) => ({
+        ...previousLoading,
+        [section]: false,
+      }));
+    }
+  }, [
+    appSettings.parentalControlEnabled,
+    copy.media.favorites,
+    credentials,
+    isMediaRailsLoadingByType,
+  ]);
+
+  const handleMainMenuSelect = useCallback((section: MainMenuSection) => {
+    isOpeningExploreItem.current = false;
+    setMainMenuFocusKey(section === 'settings' ? 'explore-quick-settings' : `explore-quick-${section}`);
+
+    if (section === 'movies' || section === 'series') {
+      setMediaRailsSection(section);
+      setActiveTab('home');
+      setSelectedCategory(null);
+      setLoadedCategories([]);
+      setAllCategoryChannels([]);
+      setPreviewChannel(null);
+      setPreparedPreviewChannelId(null);
+      loadMediaRails(section);
+      return;
+    }
+
+    setMediaRailsSection(null);
+    setActiveTab(section);
+  }, [loadMediaRails]);
 
   const loadCategoryStreams = useCallback(async (category: MediaCategory) => {
     if (!credentials) return;
@@ -589,7 +1210,7 @@ export default function Home() {
           );
         }
 
-        const channels: ChannelListViewChannel[] = storedFavorites.map((favorite) => {
+        let channels: ChannelListViewChannel[] = storedFavorites.map((favorite) => {
           const matchedStream = favoriteStreamById.get(String(favorite.id));
           const streamId = String(matchedStream?.stream_id || matchedStream?.series_id || favorite.id);
           const extension = matchedStream?.container_extension ||
@@ -658,6 +1279,11 @@ export default function Home() {
             trailerUrl: trailerUrl ? String(trailerUrl) : '',
           };
         });
+
+        if (currentMediaKey === 'live' && channels.some((channel) => !hasUsableChannelLogo(channel.logo))) {
+          channels = enrichChannelsWithCatalogLogos(channels, await loadLiveLogoCatalog());
+        }
+
         const firstChannel = channels[0] ?? null;
 
         firstChannelFocusKey = firstChannel ? getChannelFocusKey(firstChannel.id) : 'content-back';
@@ -689,9 +1315,13 @@ export default function Home() {
         Array.isArray(streams) && category.isAll && appSettings.parentalControlEnabled
           ? streams.filter((stream: any) => !restrictedCategoryIds.has(String(stream.category_id)))
           : streams;
-      const channels: ChannelListViewChannel[] = Array.isArray(visibleStreams)
+      let channels: ChannelListViewChannel[] = Array.isArray(visibleStreams)
         ? visibleStreams.map((stream: any) => mapStreamToChannel(stream, params, credentials, category.id))
         : [];
+
+      if (currentMediaKey === 'live' && channels.some((channel) => !hasUsableChannelLogo(channel.logo))) {
+        channels = enrichChannelsWithCatalogLogos(channels, await loadLiveLogoCatalog());
+      }
 
       const firstChannel = channels[0] ?? null;
       firstChannelFocusKey = firstChannel ? getChannelFocusKey(firstChannel.id) : 'content-back';
@@ -708,26 +1338,26 @@ export default function Home() {
       setIsLoadingMore(false);
       window.setTimeout(() => setFocus(firstChannelFocusKey), 0);
     }
-  }, [activeTab, appSettings.parentalControlEnabled, credentials, currentMediaKey, restrictedCategoryIds]);
+  }, [activeTab, appSettings.parentalControlEnabled, credentials, currentMediaKey, loadLiveLogoCatalog, restrictedCategoryIds]);
 
-  const loadSearchCatalog = useCallback(async () => {
-    if (!credentials || isSearchCatalogLoadingByType[currentMediaKey]) return;
+  const loadSearchCatalogForSection = useCallback(async (section: MediaSection) => {
+    if (!credentials || isSearchCatalogLoadingByType[section]) return;
 
-    const params = getActionParams(activeTab);
+    const params = getActionParams(section);
     const cacheKey = `search:${params.type}:${appSettings.parentalControlEnabled ? 'parental-on' : 'parental-off'}`;
     const cachedChannels = searchCatalogCache.current.get(cacheKey);
 
     if (cachedChannels) {
       setSearchCatalogByType((previousCatalog) => ({
         ...previousCatalog,
-        [currentMediaKey]: cachedChannels,
+        [section]: cachedChannels,
       }));
       return;
     }
 
     setIsSearchCatalogLoadingByType((previousLoading) => ({
       ...previousLoading,
-      [currentMediaKey]: true,
+      [section]: true,
     }));
 
     try {
@@ -743,28 +1373,31 @@ export default function Home() {
       searchCatalogCache.current.set(cacheKey, channels);
       setSearchCatalogByType((previousCatalog) => ({
         ...previousCatalog,
-        [currentMediaKey]: channels,
+        [section]: channels,
       }));
     } catch (error) {
       console.error('Erro ao carregar catalogo da busca:', error);
       setSearchCatalogByType((previousCatalog) => ({
         ...previousCatalog,
-        [currentMediaKey]: [],
+        [section]: [],
       }));
     } finally {
       setIsSearchCatalogLoadingByType((previousLoading) => ({
         ...previousLoading,
-        [currentMediaKey]: false,
+        [section]: false,
       }));
     }
   }, [
-    activeTab,
     appSettings.parentalControlEnabled,
     credentials,
-    currentMediaKey,
     isSearchCatalogLoadingByType,
     restrictedCategoryIds,
   ]);
+
+  const loadSearchCatalog = useCallback(
+    () => loadSearchCatalogForSection(currentMediaKey),
+    [currentMediaKey, loadSearchCatalogForSection]
+  );
 
   const closeRestrictedCategoryModal = useCallback(() => {
     const category = pendingRestrictedCategory;
@@ -834,11 +1467,29 @@ export default function Home() {
     movies: copy.content.searchingAllMovies,
     series: copy.content.searchingAllSeries,
   };
+  const mediaRails = mediaRailsSection ? mediaRailsByType[mediaRailsSection] : [];
+  const mediaRailsSearchItems = mediaRailsSection
+    ? (searchCatalogByType[mediaRailsSection].length > 0
+      ? searchCatalogByType[mediaRailsSection]
+      : mediaRails.flatMap((rail) => rail.items))
+    : [];
+  const handleMediaRailsSearchOpen = useCallback(() => {
+    if (!mediaRailsSection) return;
+    loadSearchCatalogForSection(mediaRailsSection);
+  }, [loadSearchCatalogForSection, mediaRailsSection]);
   const currentFavoriteIds = favoriteIdsByType[currentMediaKey] ?? [];
+  const playerMediaKey = activePlayerMediaKey ?? currentMediaKey;
+  const exploreDetailsIsFavorite = exploreDetails
+    ? (favoriteIdsByType[exploreDetails.section] ?? []).includes(exploreDetails.item.id)
+    : false;
 
   const playableChannels = useMemo(
-    () => allCategoryChannels.length > 0 ? allCategoryChannels : loadedCategories.flatMap((category) => category.channels),
-    [allCategoryChannels, loadedCategories]
+    () => playerQueue.length > 0
+      ? playerQueue
+      : allCategoryChannels.length > 0
+        ? allCategoryChannels
+        : loadedCategories.flatMap((category) => category.channels),
+    [allCategoryChannels, loadedCategories, playerQueue]
   );
 
   const selectedChannelIndex = selectedChannel
@@ -859,28 +1510,43 @@ export default function Home() {
 
   const handleClosePlayer = useCallback(() => {
     setSelectedChannel(null);
+    setActivePlayerMediaKey(null);
+    setPlayerQueue([]);
+    lastRecordedLiveWatchId.current = null;
     window.setTimeout(() => {
+      if (seriesBrowser) {
+        setFocus(lastSeriesEpisodeFocusKey || 'series-browser-back');
+        return;
+      }
+
+      if (exploreDetails) {
+        setFocus('media-fullscreen-primary');
+        return;
+      }
+
       setFocus(previewChannel ? getChannelFocusKey(previewChannel.id) : 'content-back');
     }, 0);
-  }, [previewChannel]);
+  }, [exploreDetails, lastSeriesEpisodeFocusKey, previewChannel, seriesBrowser]);
 
   const handlePreviousChannel = useCallback(() => {
     if (selectedChannelIndex > 0) {
       const channel = playableChannels[selectedChannelIndex - 1];
       setSelectedChannel(channel);
+      setActivePlayerMediaKey((previousKey) => previousKey ?? currentMediaKey);
       setPreviewChannel(channel);
       setPreparedPreviewChannelId(channel.id);
     }
-  }, [playableChannels, selectedChannelIndex]);
+  }, [currentMediaKey, playableChannels, selectedChannelIndex]);
 
   const handleNextChannel = useCallback(() => {
     if (selectedChannelIndex >= 0 && selectedChannelIndex < playableChannels.length - 1) {
       const channel = playableChannels[selectedChannelIndex + 1];
       setSelectedChannel(channel);
+      setActivePlayerMediaKey((previousKey) => previousKey ?? currentMediaKey);
       setPreviewChannel(channel);
       setPreparedPreviewChannelId(channel.id);
     }
-  }, [playableChannels, selectedChannelIndex]);
+  }, [currentMediaKey, playableChannels, selectedChannelIndex]);
 
   const handleChannelFocus = useCallback((channel: ChannelListViewChannel) => {
     if (previewChannel?.id === channel.id) return;
@@ -893,7 +1559,19 @@ export default function Home() {
     if (currentMediaKey === 'live') {
       setPreviewChannel(channel);
       setPreparedPreviewChannelId(channel.id);
+      setActivePlayerMediaKey(currentMediaKey);
       setSelectedChannel(channel);
+      return;
+    }
+
+    if (currentMediaKey === 'series') {
+      setPreviewChannel(channel);
+      setPreparedPreviewChannelId(channel.id);
+      setSeriesBrowser({
+        series: channel,
+        returnFocusKey: getChannelFocusKey(channel.id),
+      });
+      window.setTimeout(() => setFocus('series-browser-back'), 0);
       return;
     }
 
@@ -903,6 +1581,7 @@ export default function Home() {
       return;
     }
 
+    setActivePlayerMediaKey(currentMediaKey);
     setSelectedChannel(channel);
   }, [currentMediaKey, preparedPreviewChannelId, previewChannel]);
 
@@ -939,9 +1618,149 @@ export default function Home() {
   const handlePreviewPress = useCallback(() => {
     if (!previewChannel) return;
 
+    if (currentMediaKey === 'series') {
+      setPreparedPreviewChannelId(previewChannel.id);
+      setSeriesBrowser({
+        series: previewChannel,
+        returnFocusKey: getChannelFocusKey(previewChannel.id),
+      });
+      window.setTimeout(() => setFocus('series-browser-back'), 0);
+      return;
+    }
+
     setPreparedPreviewChannelId(previewChannel.id);
+    setActivePlayerMediaKey(currentMediaKey);
     setSelectedChannel(previewChannel);
-  }, [previewChannel]);
+  }, [currentMediaKey, previewChannel]);
+
+  useEffect(() => {
+    if (!selectedChannel || playerMediaKey !== 'live') return;
+    if (lastRecordedLiveWatchId.current === selectedChannel.id) return;
+
+    lastRecordedLiveWatchId.current = selectedChannel.id;
+    const nextHistory = recordLiveWatch(selectedChannel).slice(0, EXPLORE_HISTORY_LIMIT);
+    setExploreItemsByType((previousItems) => ({
+      ...previousItems,
+      live: nextHistory,
+    }));
+  }, [playerMediaKey, selectedChannel]);
+
+  const openExploreItemInList = useCallback((section: ExploreMediaSection, channel: ChannelListViewChannel) => {
+    const sectionTitleByType: Record<MediaSection, string> = {
+      live: copy.media.liveTitle,
+      movies: copy.media.moviesTitle,
+      series: copy.media.seriesTitle,
+    };
+    const category: MediaCategory = {
+      id: `${section}-explore`,
+      name: sectionTitleByType[section],
+      isAll: true,
+    };
+
+    isOpeningExploreItem.current = true;
+    setActiveTab(section);
+    setSelectedCategory(category);
+    setLoadedCategories([{ id: category.id, name: category.name, channels: [channel] }]);
+    setAllCategoryChannels([channel]);
+    setPreviewChannel(channel);
+    setPreparedPreviewChannelId(section === 'live' ? channel.id : null);
+    setFavoriteFeedback('');
+
+    if (section === 'live') {
+      setActivePlayerMediaKey('live');
+      setSelectedChannel(channel);
+      return;
+    }
+
+    window.setTimeout(() => setFocus(getChannelFocusKey(channel.id)), 0);
+  }, [copy.media.liveTitle, copy.media.moviesTitle, copy.media.seriesTitle]);
+
+  const handleExploreItemPress = useCallback((
+    section: ExploreMediaSection,
+    channel: ChannelListViewChannel,
+    focusKey: string
+  ) => {
+    if (section === 'live') {
+      openExploreItemInList(section, channel);
+      return;
+    }
+
+    setExploreDetails({ section, item: channel, focusKey });
+    setFavoriteFeedback('');
+    window.setTimeout(() => setFocus('media-fullscreen-primary'), 0);
+  }, [openExploreItemInList]);
+
+  const handleExploreSearch = useCallback(() => {
+    setActiveTab('live');
+    window.setTimeout(() => setFocus('category-grid-search'), 0);
+  }, []);
+
+  const handleCloseExploreDetails = useCallback(() => {
+    const previousFocusKey = exploreDetails?.focusKey;
+
+    setSeriesBrowser(null);
+    setExploreDetails(null);
+    window.setTimeout(() => {
+      if (previousFocusKey) {
+        setFocus(previousFocusKey);
+      }
+    }, 40);
+  }, [exploreDetails]);
+
+  const handlePlayExploreDetails = useCallback(() => {
+    if (!exploreDetails) return;
+
+    const sectionItems = exploreItemsByType[exploreDetails.section];
+    setAllCategoryChannels(sectionItems.length > 0 ? sectionItems : [exploreDetails.item]);
+    setPreviewChannel(exploreDetails.item);
+    setPreparedPreviewChannelId(exploreDetails.item.id);
+    setActivePlayerMediaKey(exploreDetails.section);
+    setSelectedChannel(exploreDetails.item);
+  }, [exploreDetails, exploreItemsByType]);
+
+  const handleOpenExploreSeries = useCallback(() => {
+    if (!exploreDetails) return;
+
+    setSeriesBrowser({
+      series: exploreDetails.item,
+      returnFocusKey: 'media-fullscreen-primary',
+    });
+    window.setTimeout(() => setFocus('series-browser-back'), 0);
+  }, [exploreDetails]);
+
+  const handleCloseSeriesBrowser = useCallback(() => {
+    const nextFocusKey = seriesBrowser?.returnFocusKey || 'content-back';
+
+    setSeriesBrowser(null);
+    setLastSeriesEpisodeFocusKey('');
+    window.setTimeout(() => setFocus(nextFocusKey), 0);
+  }, [seriesBrowser]);
+
+  const handlePlaySeriesEpisode = useCallback((
+    episode: ChannelListViewChannel,
+    episodeChannels: ChannelListViewChannel[],
+    focusKey: string
+  ) => {
+    setPreviewChannel(episode);
+    setPreparedPreviewChannelId(episode.id);
+    setPlayerQueue(episodeChannels);
+    setLastSeriesEpisodeFocusKey(focusKey);
+    setActivePlayerMediaKey('series');
+    setSelectedChannel(episode);
+  }, []);
+
+  const handleExploreDetailsFavoriteToggle = useCallback(() => {
+    if (!exploreDetails) return;
+
+    const result = toggleFavorite(exploreDetails.section, exploreDetails.item);
+    const nextFavoriteIds = result.favorites.map((favorite) => favorite.id);
+
+    setFavoriteIdsByType((previousIds) => ({
+      ...previousIds,
+      [exploreDetails.section]: nextFavoriteIds,
+    }));
+    setFavoriteFeedback(result.isFavorite ? copy.content.favoriteAdded : copy.content.favoriteRemoved);
+  }, [copy.content.favoriteAdded, copy.content.favoriteRemoved, exploreDetails]);
 
   useEffect(() => {
     if (!favoriteFeedback) return;
@@ -1009,12 +1828,29 @@ export default function Home() {
         backgroundColor: '#05050b',
       }}
     >
-      {activeTab === 'home' ? (
-        <MainMenu
-          onSelect={handleMainMenuSelect}
-          onLogout={handleOpenLogoutConfirm}
-          initialFocusKey={mainMenuFocusKey}
+      {mediaRailsSection ? (
+        <MediaCategoryRails
+          section={mediaRailsSection}
           language={appSettings.language}
+          rails={mediaRails}
+          searchItems={mediaRailsSearchItems}
+          isLoading={isMediaRailsLoadingByType[mediaRailsSection]}
+          isSearchCatalogLoading={isSearchCatalogLoadingByType[mediaRailsSection]}
+          onBack={handleBackFromMediaRails}
+          onOpenSearch={handleMediaRailsSearchOpen}
+          onOpenItem={handleExploreItemPress}
+        />
+      ) : activeTab === 'home' ? (
+        <ExploreHome
+          language={appSettings.language}
+          liveItems={exploreItemsByType.live}
+          movieItems={exploreItemsByType.movies}
+          seriesItems={exploreItemsByType.series}
+          isLoading={isExploreLoading}
+          onOpenSection={handleMainMenuSelect}
+          onOpenSearch={handleExploreSearch}
+          onOpenItem={handleExploreItemPress}
+          onLogout={handleOpenLogoutConfirm}
         />
       ) : activeTab === 'settings' ? (
         <SettingsScreen
@@ -1073,6 +1909,30 @@ export default function Home() {
         />
       )}
 
+      {exploreDetails && (
+        <MediaFullscreenDetails
+          item={exploreDetails.item}
+          type={exploreDetails.section}
+          credentials={credentials}
+          favorite={exploreDetailsIsFavorite}
+          language={appSettings.language}
+          onClose={handleCloseExploreDetails}
+          onPlay={handlePlayExploreDetails}
+          onOpenSeries={handleOpenExploreSeries}
+          onFavoriteToggle={handleExploreDetailsFavoriteToggle}
+        />
+      )}
+
+      {seriesBrowser && (
+        <SeriesEpisodeBrowser
+          series={seriesBrowser.series}
+          credentials={credentials}
+          language={appSettings.language}
+          onBack={handleCloseSeriesBrowser}
+          onPlayEpisode={handlePlaySeriesEpisode}
+        />
+      )}
+
       {canScrollDown && (
         <div className="scrollDownHint">
           <span>v</span>
@@ -1091,8 +1951,8 @@ export default function Home() {
           hasNext={selectedChannelIndex >= 0 && selectedChannelIndex < playableChannels.length - 1}
           controlsHideDelayMs={appSettings.controlsHideDelayMs}
           autoPlayNext={appSettings.autoPlayNext}
-          playerMode={appSettings.playerModeByType[currentMediaKey]}
-          contentType={currentMediaKey}
+          playerMode={appSettings.playerModeByType[playerMediaKey]}
+          contentType={playerMediaKey}
           language={appSettings.language}
         />
       )}
@@ -1125,7 +1985,7 @@ export default function Home() {
       )}
 
       <style jsx global>{`
-        body { overflow: ${selectedChannel ? 'hidden' : 'auto'}; background-color: #000; color: #fff; }
+        body { overflow: ${selectedChannel || exploreDetails || seriesBrowser ? 'hidden' : 'auto'}; background-color: #000; color: #fff; }
       `}</style>
     </main>
   );

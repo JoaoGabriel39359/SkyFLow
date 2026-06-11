@@ -258,6 +258,10 @@ export default function VideoPlayer({
     let hls: Hls | null = null;
     let triedHls = false;
     let triedNative = false;
+    let hlsNetworkRetries = 0;
+    let hlsMediaRetries = 0;
+    let nativeErrorFallbackUsed = false;
+    const hlsRetryTimeouts: number[] = [];
     const video = videoRef.current;
     if (!video) return undefined;
 
@@ -280,6 +284,8 @@ export default function VideoPlayer({
     };
 
     const destroyHls = () => {
+      hlsRetryTimeouts.splice(0).forEach((timeoutId) => window.clearTimeout(timeoutId));
+
       if (hls) {
         hls.destroy();
         hls = null;
@@ -310,24 +316,48 @@ export default function VideoPlayer({
       hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
+        maxBufferLength: 18,
+        backBufferLength: 8,
       });
       hls.loadSource(url);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, playVideo);
       hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) {
-          if (playerMode === 'auto' && !triedNative) {
-            startNativePlayback();
-            return;
-          }
+        if (!data.fatal || !hls) return;
 
-          showPlaybackError();
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR && hlsNetworkRetries < 3) {
+          hlsNetworkRetries += 1;
+          const timeoutId = window.setTimeout(() => {
+            hls?.startLoad();
+          }, 450 * hlsNetworkRetries);
+          hlsRetryTimeouts.push(timeoutId);
+          return;
         }
+
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && hlsMediaRetries < 2) {
+          hlsMediaRetries += 1;
+          hls.recoverMediaError();
+          return;
+        }
+
+        if (playerMode === 'auto' && !triedNative) {
+          startNativePlayback();
+          return;
+        }
+
+        showPlaybackError();
       });
     };
 
     const handleVideoError = () => {
-      if (playerMode === 'auto' && !triedHls && !isDirectVideoFile) {
+      if (
+        !nativeErrorFallbackUsed &&
+        !triedHls &&
+        !isDirectVideoFile &&
+        (playerMode === 'auto' || playerMode === 'native') &&
+        (isHlsStream || Hls.isSupported())
+      ) {
+        nativeErrorFallbackUsed = true;
         startHlsPlayback();
         return;
       }
@@ -347,7 +377,11 @@ export default function VideoPlayer({
       startNativePlayback();
     } else if (playerMode === 'hls') {
       startHlsPlayback();
-    } else if (nativeHlsSupport || isDirectVideoFile) {
+    } else if (isDirectVideoFile) {
+      startNativePlayback();
+    } else if (isHlsStream && Hls.isSupported() && !nativeHlsSupport) {
+      startHlsPlayback();
+    } else if (nativeHlsSupport) {
       startNativePlayback();
     } else if (isHlsStream || Hls.isSupported()) {
       startHlsPlayback();
@@ -434,12 +468,10 @@ export default function VideoPlayer({
     };
 
     window.addEventListener('keydown', handleActivity, true);
-    window.addEventListener('mousemove', handlePointerActivity);
     window.addEventListener('mousedown', handlePointerActivity);
 
     return () => {
       window.removeEventListener('keydown', handleActivity, true);
-      window.removeEventListener('mousemove', handlePointerActivity);
       window.removeEventListener('mousedown', handlePointerActivity);
     };
   }, [controlsVisible, showControls]);

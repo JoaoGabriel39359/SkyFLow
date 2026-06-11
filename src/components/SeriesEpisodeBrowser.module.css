@@ -1,0 +1,263 @@
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 22px;
+  overflow: hidden;
+  padding: 32px 48px 38px;
+  background:
+    radial-gradient(circle at 78% 16%, rgba(93, 70, 220, 0.22), transparent 34%),
+    linear-gradient(135deg, #05050b 0%, #090a16 52%, #05050b 100%);
+  color: #fff;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
+}
+
+.backButton,
+.seasonButton,
+.episodeButton,
+.playButton {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 19, 31, 0.78);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 150px;
+  min-height: 58px;
+  border-radius: 12px;
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.titleBlock span {
+  color: #bda9ff;
+  font-size: 0.9rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.titleBlock h1 {
+  margin: 4px 0 0;
+  font-size: clamp(2.2rem, 3.2vw, 4.4rem);
+  line-height: 0.96;
+  letter-spacing: 0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 24vw) minmax(0, 1fr);
+  gap: 24px;
+  min-height: 0;
+}
+
+.seriesCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 11, 20, 0.78);
+  overflow: hidden;
+}
+
+.posterWrap {
+  display: grid;
+  place-items: center;
+  min-height: 42vh;
+  padding: 20px;
+  background: rgba(17, 18, 31, 0.72);
+}
+
+.posterWrap img {
+  width: min(100%, 280px);
+  max-height: 39vh;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.posterFallback {
+  display: grid;
+  place-items: center;
+  width: min(100%, 280px);
+  aspect-ratio: 2 / 3;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(127, 91, 255, 0.35), transparent 42%),
+    rgba(18, 19, 32, 0.92);
+  color: #d9cdfd;
+  font-size: 2rem;
+  font-weight: 950;
+}
+
+.seriesInfo {
+  padding: 18px 20px 22px;
+}
+
+.seriesInfo h2 {
+  margin: 0 0 12px;
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+
+.seriesInfo p {
+  display: -webkit-box;
+  margin: 0;
+  color: #d6d0ea;
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.45;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.content {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+}
+
+.seasonRail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 4px 10px;
+}
+
+.seasonButton {
+  flex: 0 0 auto;
+  min-width: 170px;
+  min-height: 56px;
+  padding: 0 18px;
+  border-radius: 12px;
+  color: #dcd4ff;
+  font-weight: 950;
+}
+
+.seasonButton.active {
+  border-color: rgba(154, 110, 255, 0.62);
+  background: rgba(64, 41, 126, 0.82);
+  color: #fff;
+}
+
+.episodesPanel {
+  min-height: 0;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 11, 20, 0.76);
+  overflow: hidden;
+}
+
+.episodesHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.episodesHeader span,
+.episodesHeader strong {
+  color: #d8ccff;
+  font-weight: 950;
+}
+
+.episodeList {
+  display: grid;
+  gap: 10px;
+  max-height: calc(100vh - 222px);
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.episodeButton {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  min-height: 92px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.episodeNumber {
+  color: #cabaff;
+  font-size: 1.1rem;
+  font-weight: 950;
+  text-align: center;
+}
+
+.episodeInfo {
+  min-width: 0;
+}
+
+.episodeInfo strong {
+  display: block;
+  color: #fff;
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+
+.episodeInfo span {
+  display: block;
+  margin-top: 5px;
+  color: #bfc1d5;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.episodeInfo small {
+  display: -webkit-box;
+  margin-top: 5px;
+  color: #d8d8e7;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.playButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: #efe9ff;
+  font-size: 0.88rem;
+  font-weight: 950;
+}
+
+.focused {
+  border-color: #9b6dff;
+  box-shadow: 0 0 0 3px rgba(143, 91, 255, 0.46);
+  background: rgba(65, 42, 126, 0.92);
+}
+
+.emptyState,
+.loadingState {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  padding: 28px;
+  color: #d8d1f3;
+  font-weight: 900;
+  text-align: center;
+}
