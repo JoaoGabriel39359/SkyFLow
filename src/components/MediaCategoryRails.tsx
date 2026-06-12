@@ -31,6 +31,7 @@ type MediaCategoryRailsProps = {
   onBack: () => void;
   onOpenSearch: () => void;
   onOpenItem: (section: MediaCategoryRailsSection, item: ChannelListViewChannel, focusKey: string) => void;
+  onNearEnd: () => void;
 };
 
 type Copy = {
@@ -206,6 +207,7 @@ function MediaPosterCard({
   rails,
   visibleCounts,
   hasMoreItems,
+  onNearEnd,
   onReachRailEnd,
   onOpenItem,
 }: {
@@ -218,6 +220,7 @@ function MediaPosterCard({
   rails: MediaCategoryRailData[];
   visibleCounts: Record<string, number>;
   hasMoreItems: boolean;
+  onNearEnd: () => void;
   onReachRailEnd: (railId: string) => void;
   onOpenItem: (section: MediaCategoryRailsSection, item: ChannelListViewChannel, focusKey: string) => void;
 }) {
@@ -236,6 +239,10 @@ function MediaPosterCard({
     onEnterPress: () => onOpenItem(section, item, focusKey),
     onFocus: () => {
       scrollIntoView();
+      if (rail.kind !== 'search' && railIndex >= rails.length - 2) {
+        onNearEnd();
+      }
+
       if (index >= visibleItemsCount - 2 && hasMoreItems) {
         onReachRailEnd(rail.id);
       }
@@ -332,6 +339,7 @@ function RailSection({
   visibleCount,
   visibleCounts,
   onReachRailEnd,
+  onNearEnd,
   onOpenItem,
 }: {
   section: MediaCategoryRailsSection;
@@ -341,6 +349,7 @@ function RailSection({
   visibleCount: number;
   visibleCounts: Record<string, number>;
   onReachRailEnd: (railId: string) => void;
+  onNearEnd: () => void;
   onOpenItem: (section: MediaCategoryRailsSection, item: ChannelListViewChannel, focusKey: string) => void;
 }) {
   const visibleItems = rail.items.slice(0, visibleCount);
@@ -365,6 +374,7 @@ function RailSection({
             rails={rails}
             visibleCounts={visibleCounts}
             hasMoreItems={hasMoreItems}
+            onNearEnd={onNearEnd}
             onReachRailEnd={onReachRailEnd}
             onOpenItem={onOpenItem}
           />
@@ -384,6 +394,7 @@ export default function MediaCategoryRails({
   onBack,
   onOpenSearch,
   onOpenItem,
+  onNearEnd,
 }: MediaCategoryRailsProps) {
   const copy = copyByLanguage[language];
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
@@ -446,7 +457,7 @@ export default function MediaCategoryRails({
 
   useEffect(() => {
     if (initialFocusSectionRef.current === section) return undefined;
-    if (isLoading && visibleRails.length === 0) return undefined;
+    if (isLoading) return undefined;
 
     const firstRail = visibleRails.find((rail) => rail.items.length > 0);
     const target = firstRail
@@ -576,6 +587,7 @@ export default function MediaCategoryRails({
                 visibleCount={visibleCounts[rail.id] ?? (rail.kind === 'search' ? SEARCH_BATCH_SIZE : RAIL_BATCH_SIZE)}
                 visibleCounts={visibleCounts}
                 onReachRailEnd={handleReachRailEnd}
+                onNearEnd={onNearEnd}
                 onOpenItem={onOpenItem}
               />
             ))

@@ -52,7 +52,9 @@ type SeriesBrowserState = {
 const CONTENT_BATCH_SIZE = 60;
 const CATEGORY_CONTENT_CACHE_LIMIT = 6;
 const EXPLORE_HISTORY_LIMIT = 15;
-const MEDIA_RAIL_CATEGORY_BATCH_SIZE = 10;
+const INITIAL_MEDIA_RAIL_CATEGORY_COUNT = 4;
+const MEDIA_RAIL_ITEM_LIMIT = 20;
+const MEDIA_RAIL_EMPTY_SKIP_LIMIT = 12;
 type MediaSection = Exclude<MainMenuSection, 'settings'>;
 type MediaRailsState = Record<MediaCategoryRailsSection, MediaCategoryRailData[]>;
 
@@ -523,11 +525,46 @@ export default function Home() {
   const searchCatalogCache = useRef(new Map<string, ChannelListViewChannel[]>());
   const exploreContentCache = useRef(new Map<string, ChannelListViewChannel[]>());
   const mediaRailsCache = useRef(new Map<string, MediaCategoryRailData[]>());
+  const mediaRailCategoriesByType = useRef<Record<MediaCategoryRailsSection, any[]>>({
+    movies: [],
+    series: [],
+  });
+  const mediaRailNextCategoryIndexByType = useRef<Record<MediaCategoryRailsSection, number>>({
+    movies: 0,
+    series: 0,
+  });
+  const mediaRailLoadedCategoryIdsByType = useRef<Record<MediaCategoryRailsSection, Set<string>>>({
+    movies: new Set<string>(),
+    series: new Set<string>(),
+  });
+  const isLoadingMoreMediaRailCategoriesByType = useRef<Record<MediaCategoryRailsSection, boolean>>({
+    movies: false,
+    series: false,
+  });
   const liveLogoCatalog = useRef<ChannelListViewChannel[] | null>(null);
   const liveLogoCatalogPromise = useRef<Promise<ChannelListViewChannel[]> | null>(null);
   const isOpeningExploreItem = useRef(false);
   const lastRecordedLiveWatchId = useRef<string | null>(null);
   const copy = appCopy[appSettings.language];
+
+  const resetMediaRailLazyState = useCallback(() => {
+    mediaRailCategoriesByType.current = {
+      movies: [],
+      series: [],
+    };
+    mediaRailNextCategoryIndexByType.current = {
+      movies: 0,
+      series: 0,
+    };
+    mediaRailLoadedCategoryIdsByType.current = {
+      movies: new Set<string>(),
+      series: new Set<string>(),
+    };
+    isLoadingMoreMediaRailCategoriesByType.current = {
+      movies: false,
+      series: false,
+    };
+  }, []);
 
   const checkDeviceSecurity = useCallback(async () => {
     const deviceId = getDeviceId();
@@ -859,10 +896,11 @@ export default function Home() {
     searchCatalogCache.current.clear();
     exploreContentCache.current.clear();
     mediaRailsCache.current.clear();
+    resetMediaRailLazyState();
     liveLogoCatalog.current = null;
     liveLogoCatalogPromise.current = null;
     checkDeviceSecurity();
-  }, [checkDeviceSecurity]);
+  }, [checkDeviceSecurity, resetMediaRailLazyState]);
 
   const handleOpenLogoutConfirm = useCallback(() => {
     setIsLogoutConfirmOpen(true);
@@ -909,23 +947,25 @@ export default function Home() {
     saveAppSettings(nextSettings);
     searchCatalogCache.current.clear();
     mediaRailsCache.current.clear();
+    resetMediaRailLazyState();
     liveLogoCatalog.current = null;
     liveLogoCatalogPromise.current = null;
     setSearchCatalogByType(emptySearchCatalog);
     setMediaRailsByType(emptyMediaRails);
-  }, []);
+  }, [resetMediaRailLazyState]);
 
   const handleClearCatalogCache = useCallback(() => {
     categoryContentCache.current.clear();
     searchCatalogCache.current.clear();
     exploreContentCache.current.clear();
     mediaRailsCache.current.clear();
+    resetMediaRailLazyState();
     liveLogoCatalog.current = null;
     liveLogoCatalogPromise.current = null;
     setSearchCatalogByType(emptySearchCatalog);
     setExploreItemsByType(emptyExploreItems);
     setMediaRailsByType(emptyMediaRails);
-  }, []);
+  }, [resetMediaRailLazyState]);
 
   const handleBackToCategories = useCallback(() => {
     setLoadedCategories([]);
@@ -1008,18 +1048,110 @@ export default function Home() {
     return liveLogoCatalogPromise.current;
   }, [appSettings.parentalControlEnabled, credentials, restrictedCategoryIds]);
 
+  const loadMoreMediaRailCategories = useCallback(async (
+    section: MediaCategoryRailsSection,
+    targetCount = 1
+  ) => {
+    if (!credentials || isLoadingMoreMediaRailCategoriesByType.current[section]) return;
+
+    const categories = mediaRailCategoriesByType.current[section];
+    if (categories.length === 0) return;
+
+    const params = getActionParams(section);
+    const cacheKey = `media-rails:${params.type}:${appSettings.parentalControlEnabled ? 'parental-on' : 'parental-off'}`;
+    const newRails: MediaCategoryRailData[] = [];
+    let loadedCount = 0;
+    let skippedCount = 0;
+
+    isLoadingMoreMediaRailCategoriesByType.current[section] = true;
+
+    try {
+      while (
+        loadedCount < targetCount &&
+        mediaRailNextCategoryIndexByType.current[section] < categories.length &&
+        skippedCount < MEDIA_RAIL_EMPTY_SKIP_LIMIT
+      ) {
+        const category = categories[mediaRailNextCategoryIndexByType.current[section]];
+        mediaRailNextCategoryIndexByType.current[section] += 1;
+
+        const categoryId = String(category?.category_id || '');
+        if (!categoryId || mediaRailLoadedCategoryIdsByType.current[section].has(categoryId)) {
+          skippedCount += 1;
+          continue;
+        }
+
+        mediaRailLoadedCategoryIdsByType.current[section].add(categoryId);
+
+        try {
+          const streams = await getStreams(
+            credentials.url,
+            credentials.user,
+            credentials.pass,
+            params.stream,
+            categoryId
+          );
+          const items: ChannelListViewChannel[] = Array.isArray(streams)
+            ? streams
+              .slice(0, MEDIA_RAIL_ITEM_LIMIT)
+              .map((stream: any) => mapStreamToChannel(stream, params, credentials, categoryId))
+            : [];
+
+          if (items.length === 0) {
+            skippedCount += 1;
+            continue;
+          }
+
+          newRails.push({
+            id: `${section}-${categoryId}`,
+            title: String(category.category_name || 'Sem nome'),
+            items,
+            kind: 'category',
+          });
+          loadedCount += 1;
+        } catch (error) {
+          skippedCount += 1;
+          console.error('Erro ao carregar trilho de midia:', error);
+        }
+      }
+
+      if (newRails.length > 0) {
+        setMediaRailsByType((previousRails) => {
+          const currentRails = previousRails[section];
+          const currentRailIds = new Set(currentRails.map((rail) => rail.id));
+          const nextRails = [
+            ...currentRails,
+            ...newRails.filter((rail) => !currentRailIds.has(rail.id)),
+          ];
+
+          mediaRailsCache.current.set(cacheKey, nextRails);
+
+          return {
+            ...previousRails,
+            [section]: nextRails,
+          };
+        });
+      }
+    } finally {
+      isLoadingMoreMediaRailCategoriesByType.current[section] = false;
+    }
+  }, [appSettings.parentalControlEnabled, credentials]);
+
   const loadMediaRails = useCallback(async (section: MediaCategoryRailsSection) => {
     if (!credentials || isMediaRailsLoadingByType[section]) return;
 
     const params = getActionParams(section);
     const cacheKey = `media-rails:${params.type}:${appSettings.parentalControlEnabled ? 'parental-on' : 'parental-off'}`;
-    const cachedRails = mediaRailsCache.current.get(cacheKey);
 
-    if (cachedRails) {
-      setMediaRailsByType((previousRails) => ({
-        ...previousRails,
-        [section]: cachedRails,
-      }));
+    if (mediaRailCategoriesByType.current[section].length > 0 || mediaRailsCache.current.has(cacheKey)) {
+      const cachedRails = mediaRailsCache.current.get(cacheKey);
+
+      if (cachedRails) {
+        setMediaRailsByType((previousRails) => ({
+          ...previousRails,
+          [section]: cachedRails,
+        }));
+      }
+
       return;
     }
 
@@ -1055,66 +1187,17 @@ export default function Home() {
           kind: 'favorites',
         }]
         : [];
-      const loadCategoryRail = async (category: any): Promise<MediaCategoryRailData | null> => {
-        try {
-          const categoryId = String(category.category_id);
-          const streams = await getStreams(
-            credentials.url,
-            credentials.user,
-            credentials.pass,
-            params.stream,
-            categoryId
-          );
-          const items: ChannelListViewChannel[] = Array.isArray(streams)
-            ? streams.map((stream: any) => mapStreamToChannel(stream, params, credentials, categoryId))
-            : [];
 
-          return {
-            id: `${section}-${categoryId}`,
-            title: String(category.category_name || 'Sem nome'),
-            items,
-            kind: 'category' as const,
-          } satisfies MediaCategoryRailData;
-        } catch (error) {
-          console.error('Erro ao carregar trilho de midia:', error);
-          return null;
-        }
-      };
-      const loadedCategoryRails: MediaCategoryRailData[] = [];
-
-      for (let index = 0; index < visibleCategories.length; index += MEDIA_RAIL_CATEGORY_BATCH_SIZE) {
-        const categoryRails = await Promise.all(
-          visibleCategories
-            .slice(index, index + MEDIA_RAIL_CATEGORY_BATCH_SIZE)
-            .map(loadCategoryRail)
-        );
-        loadedCategoryRails.push(
-          ...categoryRails.filter((rail): rail is MediaCategoryRailData => Boolean(rail?.items.length))
-        );
-
-        const partialRails = [
-          ...favoriteRail,
-          ...loadedCategoryRails,
-        ];
-
-        if (partialRails.length > 0) {
-          setMediaRailsByType((previousRails) => ({
-            ...previousRails,
-            [section]: partialRails,
-          }));
-        }
-      }
-
-      const rails = [
-        ...favoriteRail,
-        ...loadedCategoryRails,
-      ];
-
-      mediaRailsCache.current.set(cacheKey, rails);
+      mediaRailCategoriesByType.current[section] = visibleCategories;
+      mediaRailNextCategoryIndexByType.current[section] = 0;
+      mediaRailLoadedCategoryIdsByType.current[section] = new Set<string>();
+      mediaRailsCache.current.set(cacheKey, favoriteRail);
       setMediaRailsByType((previousRails) => ({
         ...previousRails,
-        [section]: rails,
+        [section]: favoriteRail,
       }));
+
+      await loadMoreMediaRailCategories(section, INITIAL_MEDIA_RAIL_CATEGORY_COUNT);
     } catch (error) {
       console.error('Erro ao carregar trilhos de midia:', error);
       setMediaRailsByType((previousRails) => ({
@@ -1132,6 +1215,7 @@ export default function Home() {
     copy.media.favorites,
     credentials,
     isMediaRailsLoadingByType,
+    loadMoreMediaRailCategories,
   ]);
 
   const handleMainMenuSelect = useCallback((section: MainMenuSection) => {
@@ -1477,6 +1561,10 @@ export default function Home() {
     if (!mediaRailsSection) return;
     loadSearchCatalogForSection(mediaRailsSection);
   }, [loadSearchCatalogForSection, mediaRailsSection]);
+  const handleMediaRailsNearEnd = useCallback(() => {
+    if (!mediaRailsSection) return;
+    loadMoreMediaRailCategories(mediaRailsSection);
+  }, [loadMoreMediaRailCategories, mediaRailsSection]);
   const currentFavoriteIds = favoriteIdsByType[currentMediaKey] ?? [];
   const playerMediaKey = activePlayerMediaKey ?? currentMediaKey;
   const exploreDetailsIsFavorite = exploreDetails
@@ -1839,6 +1927,7 @@ export default function Home() {
           onBack={handleBackFromMediaRails}
           onOpenSearch={handleMediaRailsSearchOpen}
           onOpenItem={handleExploreItemPress}
+          onNearEnd={handleMediaRailsNearEnd}
         />
       ) : activeTab === 'home' ? (
         <ExploreHome
